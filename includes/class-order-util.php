@@ -71,6 +71,27 @@ class Order_Util {
 	}
 
 	/**
+	 * Checks whether HPOS data sync (dual-write to both wc_orders_meta and
+	 * wp_postmeta) is currently enabled.
+	 *
+	 * During a HPOS migration, WooCommerce keeps both storage backends in sync
+	 * by firing CRUD hooks on every meta change. Direct SQL writes bypass those
+	 * hooks, so callers must write to both tables manually when sync is on.
+	 *
+	 * @return bool
+	 */
+	public static function data_sync_is_enabled(): bool {
+		try {
+			$synchronizer = wc_get_container()->get(
+				\Automattic\WooCommerce\Internal\DataStores\Orders\DataSynchronizer::class
+			);
+			return $synchronizer->data_sync_is_enabled();
+		} catch ( \Exception $e ) {
+			return false;
+		}
+	}
+
+	/**
 	 * Returns the relevant order screen depending on whether
 	 * custom order tables are being used.
 	 *
@@ -332,15 +353,24 @@ class Order_Util {
 	}
 
 	/**
-	 * Get internal order notes (non-customer) for an order.
+	 * Get order notes grouped by visibility.
 	 *
-	 * Mirrors previous logic from WC_Shipstation_API_Export::get_order_notes().
-	 * Returns a flat array of note strings suitable for export or further formatting.
+	 * Fetches all approved order notes for a given order and separates them into:
+	 * - Customer notes (visible to the customer).
+	 * - Private notes (internal use only).
 	 *
 	 * @param WC_Order $order Order object.
-	 * @return array Array of internal note strings.
+	 *
+	 * @return array{
+	 * private: string[],
+	 * customer: string[]
+	 * }
 	 */
 	public static function get_order_notes( WC_Order $order ): array {
+		if ( isset( self::$order_notes_cache[ $order->get_id() ] ) ) {
+			return self::$order_notes_cache[ $order->get_id() ];
+		}
+
 		$args = array(
 			'post_id' => $order->get_id(),
 			'approve' => 'approve',
@@ -351,15 +381,421 @@ class Order_Util {
 		$notes = get_comments( $args );
 		add_filter( 'comments_clauses', array( 'WC_Comments', 'exclude_order_comments' ), 10, 1 );
 
-		$order_notes = array();
+		$order_notes = array(
+			'private'  => array(),
+			'customer' => array(),
+		);
 
 		foreach ( $notes as $note ) {
 			if ( 'WooCommerce' !== $note->comment_author ) {
-				$order_notes[] = $note->comment_content;
+				$note_type                   = (bool) get_comment_meta( $note->comment_ID, 'is_customer_note', true ) ? 'customer' : 'private';
+				$order_notes[ $note_type ][] = html_entity_decode( $note->comment_content, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 			}
 		}
 
 		return $order_notes;
+	}
+
+	/**
+	 * Mark a batch of orders as exported in a single SQL round-trip for the
+	 * `_shipstation_exported` meta marker. Order notes are still inserted
+	 * per-order so the buyer-facing audit trail is preserved and existing
+	 * comment hooks continue to fire.
+	 *
+	 * The marker write goes direct-to-SQL rather than through `save_meta_data()`.
+	 * That is the point of the bulk path: one query per batch instead of N, and
+	 * — as a side effect — HPOS's `after_meta_change` cascade that would have
+	 * bumped `wc_orders.date_updated_gmt` (re-triggering ShipStation's
+	 * `modified_after` poll) never fires, so no filter dance is needed.
+	 *
+	 * Already-exported orders are skipped so the call is idempotent. Neither
+	 * `wp_postmeta` nor `wc_orders_meta` carries a unique index on
+	 * `(object_id, meta_key)` — `wc_orders_meta` indexes that pair with a plain
+	 * `KEY`, not a `UNIQUE KEY` — so prior `_shipstation_exported` rows for the
+	 * batch are deleted before the bulk `INSERT` on both storage backends to
+	 * keep concurrent calls and post-crash retries from accumulating duplicate
+	 * meta rows.
+	 *
+	 * Trade-off: bypassing `save_meta_data()` skips WC's per-meta hooks
+	 * (`update_post_meta` / `updated_postmeta`, HPOS `after_meta_change`).
+	 * Third-party code listening for those events on `_shipstation_exported`
+	 * will not be notified by this path. The marker value, key, and the
+	 * "Order has been exported to Shipstation" order note are unchanged.
+	 *
+	 * @since 5.0.4
+	 *
+	 * @param WC_Order[] $orders Order objects.
+	 * @return void
+	 */
+	public static function mark_orders_exported_bulk( array $orders ): void {
+		if ( empty( $orders ) ) {
+			return;
+		}
+
+		$to_mark = array();
+
+		foreach ( $orders as $order ) {
+			if ( ! self::is_wc_order( $order ) ) {
+				continue;
+			}
+
+			if ( 'yes' === $order->get_meta( '_shipstation_exported', true ) ) {
+				continue;
+			}
+
+			$to_mark[ $order->get_id() ] = $order;
+		}
+
+		if ( empty( $to_mark ) ) {
+			return;
+		}
+
+		global $wpdb;
+		$ids     = array_keys( $to_mark );
+		$hpos    = self::custom_orders_table_usage_is_enabled();
+		$sync_on = self::data_sync_is_enabled();
+
+		// Build the list of tables to write to. Under HPOS sync mode both
+		// wc_orders_meta and wp_postmeta are live. WC's sync mechanism mirrors
+		// changes by listening to CRUD hooks — which a direct SQL write bypasses
+		// entirely — so we must keep both tables consistent ourselves.
+		//
+		// | HPOS | Sync | Tables written            |
+		// |------|------|---------------------------|
+		// | off  | off  | wp_postmeta               |
+		// | on   | off  | wc_orders_meta            |
+		// | on   | on   | wc_orders_meta + postmeta |
+		// | off  | on   | wp_postmeta + wc_orders_meta |
+		$targets = array();
+		if ( $hpos || $sync_on ) {
+			$targets[] = array( 'table' => $wpdb->prefix . 'wc_orders_meta', 'col' => 'order_id' );
+		}
+		if ( ! $hpos || $sync_on ) {
+			$targets[] = array( 'table' => $wpdb->postmeta, 'col' => 'post_id' );
+		}
+
+		// Neither `wp_postmeta` nor `wc_orders_meta` has a UNIQUE index on
+		// (object_id, meta_key), so clear any prior `_shipstation_exported`
+		// rows for the batch before the bulk INSERT to keep concurrent
+		// requests and post-crash retries from accumulating duplicates.
+		$id_placeholders  = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$row_placeholders = implode( ',', array_fill( 0, count( $ids ), "(%d, '_shipstation_exported', 'yes')" ) );
+		$all_ok           = true;
+
+		foreach ( $targets as $target ) {
+			$table      = $target['table'];
+			$object_col = $target['col'];
+
+			$delete_result = $wpdb->query(
+				$wpdb->prepare(
+					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table and $object_col are string literals; $id_placeholders is a list of %d tokens.
+					"DELETE FROM {$table} WHERE meta_key = '_shipstation_exported' AND {$object_col} IN ({$id_placeholders})",
+					...$ids
+				)
+			);
+
+			$insert_result = $wpdb->query(
+				$wpdb->prepare(
+					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table and $object_col are string literals; IDs are %d.
+					"INSERT INTO {$table} ({$object_col}, meta_key, meta_value) VALUES {$row_placeholders}",
+					...$ids
+				)
+			);
+
+			if ( false === $delete_result || false === $insert_result ) {
+				Logger::error(
+					sprintf(
+						'mark_orders_exported_bulk SQL failed on %s (delete=%s, insert=%s): %s',
+						$table,
+						var_export( $delete_result, true ), // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
+						var_export( $insert_result, true ), // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
+						$wpdb->last_error
+					)
+				);
+				$all_ok = false;
+			}
+		}
+
+		// Bail without writing notes if any statement failed — otherwise the
+		// next export run would see an empty marker, push these orders back
+		// onto the queue, and add a second "exported to ShipStation" note.
+		if ( ! $all_ok ) {
+			return;
+		}
+
+		foreach ( $to_mark as $order ) {
+			$order->add_order_note( __( 'Order has been exported to Shipstation', 'woocommerce-shipstation-integration' ) );
+		}
+	}
+
+	/**
+	 * Prime the WooCommerce order-items and order-itemmeta caches for a batch of order IDs.
+	 *
+	 * WooCommerce's CPT order data store (which HPOS inherits `read_items()` from) caches
+	 * items under `'order-items-{order_id}'` in the `'orders'` group. When the CPT store
+	 * runs a `wc_get_orders()` query with `type = shop_order`, it calls
+	 * `prime_order_item_caches_for_orders()` and bulk-loads the items for the whole batch.
+	 * The HPOS data store does not trigger that helper, so `$order->get_items()` fires one
+	 * `wc_order_items` SELECT per order.
+	 *
+	 * This method replicates the same priming behavior with two queries:
+	 *   1. `SELECT ... FROM wc_order_items WHERE order_id IN ( ... )` — all items for the batch.
+	 *   2. `update_meta_cache( 'order_item', $all_item_ids )` — bulk prime `wc_order_itemmeta`.
+	 *
+	 * @since 5.0.4
+	 *
+	 * @param int[] $order_ids Order IDs to prime.
+	 * @return void
+	 */
+	public static function prime_order_items_for_batch( array $order_ids ): void {
+		if ( empty( $order_ids ) ) {
+			return;
+		}
+
+		$order_ids = array_values( array_unique( array_map( 'absint', $order_ids ) ) );
+
+		$cache_keys   = array_map(
+			static function ( $id ) {
+				return 'order-items-' . $id;
+			},
+			$order_ids
+		);
+		$cache_values = wc_cache_get_multiple( $cache_keys, 'orders' );
+
+		$to_prime = array();
+		foreach ( $order_ids as $id ) {
+			if ( false === $cache_values[ 'order-items-' . $id ] ) {
+				$to_prime[] = $id;
+			}
+		}
+
+		if ( empty( $to_prime ) ) {
+			return;
+		}
+
+		global $wpdb;
+		$ids_sql = implode( ',', $to_prime );
+		$items   = $wpdb->get_results(
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $ids_sql is an absint-sanitized list above.
+			"SELECT order_item_type, order_item_id, order_id, order_item_name FROM {$wpdb->prefix}woocommerce_order_items WHERE order_id IN ( {$ids_sql} ) ORDER BY order_item_id"
+		);
+
+		$grouped = array_fill_keys( $to_prime, array() );
+		foreach ( (array) $items as $item ) {
+			$grouped[ (int) $item->order_id ][] = $item;
+		}
+
+		foreach ( $grouped as $id => $rows ) {
+			wp_cache_set( 'order-items-' . $id, $rows, 'orders' );
+		}
+
+		if ( empty( $items ) ) {
+			return;
+		}
+
+		$item_ids = wp_list_pluck( $items, 'order_item_id' );
+		update_meta_cache( 'order_item', array_map( 'absint', $item_ids ) );
+	}
+
+	/**
+	 * Prime the refunds cache for a batch of order IDs.
+	 *
+	 * `$order->get_refunds()` caches its result under the key
+	 * `WC_Cache_Helper::get_cache_prefix( 'orders' ) . 'refunds' . $id` in the
+	 * `'orders'` group. On HPOS the CPT store's `prime_refund_caches_for_order()`
+	 * helper is not triggered, so without this call the first `get_refunds()` on
+	 * each order runs a separate `wc_get_orders( type = shop_order_refund )` query.
+	 *
+	 * Fetches every refund whose parent is in the batch with a single
+	 * `wc_get_orders()` call (HPOS aliases `post_parent__in` to `parent_order_id`),
+	 * groups the results by parent, and stashes each order's refunds under the
+	 * expected cache key so the per-order `get_refunds()` becomes a memory read.
+	 *
+	 * @since 5.0.4
+	 *
+	 * @param int[] $order_ids Order IDs to prime.
+	 * @return void
+	 */
+	public static function prime_refunds_for_batch( array $order_ids ): void {
+		if ( empty( $order_ids ) ) {
+			return;
+		}
+
+		$order_ids = array_values( array_unique( array_map( 'absint', $order_ids ) ) );
+
+		$cache_keys    = array();
+		$keys_by_order = array();
+		foreach ( $order_ids as $id ) {
+			$key                  = \WC_Cache_Helper::get_cache_prefix( 'orders' ) . 'refunds' . $id;
+			$cache_keys[]         = $key;
+			$keys_by_order[ $id ] = $key;
+		}
+
+		$cache_values = wc_cache_get_multiple( $cache_keys, 'orders' );
+
+		$to_prime = array();
+		foreach ( $order_ids as $id ) {
+			if ( false === $cache_values[ $keys_by_order[ $id ] ] ) {
+				$to_prime[] = $id;
+			}
+		}
+
+		if ( empty( $to_prime ) ) {
+			return;
+		}
+
+		$refunds = wc_get_orders(
+			array(
+				'type'            => 'shop_order_refund',
+				'post_parent__in' => $to_prime,
+				'limit'           => -1,
+			)
+		);
+
+		$grouped = array_fill_keys( $to_prime, array() );
+		foreach ( (array) $refunds as $refund ) {
+			if ( ! $refund instanceof \WC_Order_Refund ) {
+				continue;
+			}
+			$parent_id = $refund->get_parent_id();
+			if ( isset( $grouped[ $parent_id ] ) ) {
+				$grouped[ $parent_id ][] = $refund;
+			}
+		}
+
+		foreach ( $grouped as $id => $list ) {
+			wp_cache_set( $keys_by_order[ $id ], $list, 'orders' );
+		}
+	}
+
+	/**
+	 * Pre-fetched order-notes cache, keyed by order ID.
+	 *
+	 * @var array<int, array{private: string[], customer: string[]}>
+	 */
+	private static array $order_notes_cache = array();
+
+	/**
+	 * Prime the order-notes cache for a batch of order IDs.
+	 *
+	 * WordPress's `get_comments()` result cache is keyed by a hash of its arguments,
+	 * so a per-order call cannot be served from a batch query's cache. This method
+	 * instead bulk-fetches every order note for the batch in a single `get_comments()`,
+	 * primes `wp_commentmeta` for all returned comments with one `update_meta_cache()`,
+	 * and stores the resolved `{ private, customer }` arrays in a class-level map that
+	 * `get_order_notes()` consults before falling back to the per-order path.
+	 *
+	 * @since 5.0.4
+	 *
+	 * @param int[] $order_ids Order IDs to prime.
+	 * @return void
+	 */
+	public static function prime_order_notes_for_batch( array $order_ids ): void {
+		if ( empty( $order_ids ) ) {
+			return;
+		}
+
+		$order_ids = array_values( array_unique( array_map( 'absint', $order_ids ) ) );
+
+		$to_prime = array_filter(
+			$order_ids,
+			static function ( $id ) {
+				return ! isset( self::$order_notes_cache[ $id ] );
+			}
+		);
+		if ( empty( $to_prime ) ) {
+			return;
+		}
+
+		// Seed every order with an empty structure so orders with no notes still
+		// short-circuit the per-order query path below.
+		foreach ( $to_prime as $id ) {
+			self::$order_notes_cache[ $id ] = array(
+				'private'  => array(),
+				'customer' => array(),
+			);
+		}
+
+		remove_filter( 'comments_clauses', array( 'WC_Comments', 'exclude_order_comments' ), 10 );
+		$notes = get_comments(
+			array(
+				'post__in' => $to_prime,
+				'approve'  => 'approve',
+				'type'     => 'order_note',
+			)
+		);
+		add_filter( 'comments_clauses', array( 'WC_Comments', 'exclude_order_comments' ), 10, 1 );
+
+		if ( empty( $notes ) ) {
+			return;
+		}
+
+		$comment_ids = array_map(
+			static function ( $note ) {
+				return (int) $note->comment_ID;
+			},
+			(array) $notes
+		);
+		update_meta_cache( 'comment', $comment_ids );
+
+		foreach ( (array) $notes as $note ) {
+			if ( 'WooCommerce' === $note->comment_author ) {
+				continue;
+			}
+			$order_id = (int) $note->comment_post_ID;
+			if ( ! isset( self::$order_notes_cache[ $order_id ] ) ) {
+				continue;
+			}
+			$bucket                                            = get_comment_meta( $note->comment_ID, 'is_customer_note', true ) ? 'customer' : 'private';
+			self::$order_notes_cache[ $order_id ][ $bucket ][] = html_entity_decode( $note->comment_content, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		}
+	}
+
+	/**
+	 * Prime the WP post + postmeta caches for every product referenced by a batch of orders.
+	 *
+	 * `$item->get_product()` routes through `WC_Product_Factory`, which does not cache
+	 * instances across calls — every call runs the data-store `read()`, hitting
+	 * `wp_posts` and `wp_postmeta` on a cache miss. On a 500-order batch with a few
+	 * items each that is ~1,500 uncached round trips per request.
+	 *
+	 * Priming the post + postmeta caches once for every unique product or variation ID
+	 * across the batch turns all subsequent `get_product()` calls into cache hits.
+	 * `_prime_post_caches()` internally skips already-cached IDs, so this is safe to
+	 * call unconditionally. Call after `prime_order_items_for_batch()` so the
+	 * `$order->get_items()` iteration below is itself a cache hit.
+	 *
+	 * @since 5.0.4
+	 *
+	 * @param WC_Order[] $orders Hydrated orders whose line-item products should be primed.
+	 * @return void
+	 */
+	public static function prime_products_for_batch( array $orders ): void {
+		if ( empty( $orders ) ) {
+			return;
+		}
+
+		$product_ids = array();
+		foreach ( $orders as $order ) {
+			if ( ! self::is_wc_order( $order ) ) {
+				continue;
+			}
+			foreach ( $order->get_items() as $item ) {
+				if ( ! $item instanceof \WC_Order_Item_Product ) {
+					continue;
+				}
+				$product_id = $item->get_variation_id() ? $item->get_variation_id() : $item->get_product_id();
+				if ( $product_id ) {
+					$product_ids[] = (int) $product_id;
+				}
+			}
+		}
+
+		if ( empty( $product_ids ) ) {
+			return;
+		}
+
+		_prime_post_caches( array_values( array_unique( $product_ids ) ), true, true );
 	}
 
 	/**

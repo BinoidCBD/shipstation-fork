@@ -5,9 +5,13 @@
  * @package WC_ShipStation
  */
 
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- File is included inside WC_ShipStation_Integration::init_form_fields() (see class-wc-shipstation-integration.php:467); these variables are method-scoped at runtime, not globals.
+
 use Automattic\WooCommerce\Enums\OrderInternalStatus;
 use WooCommerce\Shipping\ShipStation\Order_Util;
 use WooCommerce\Shipping\ShipStation\Auth_Controller;
+use WooCommerce\Shipping\ShipStation\Features;
+use WooCommerce\Shipping\ShipStation\Main;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -112,7 +116,7 @@ $fields = array(
 		'options'     => $statuses,
 		'description' => __( 'Define the order status you wish to map for ShipStation "Cancelled" status. By default this is "cancelled".', 'woocommerce-shipstation-integration' ),
 		'desc_tip'    => true,
-		'default'     => array( OrderInternalStatus::CANCELLED ),
+		'default'     => array( OrderInternalStatus::CANCELLED, OrderInternalStatus::REFUNDED ),
 	),
 	'gift_enabled'                                         => array(
 		'title'       => __( 'Gift', 'woocommerce-shipstation-integration' ),
@@ -131,5 +135,42 @@ $fields = array(
 		'default'     => 'yes',
 	),
 );
+
+if ( Features::is_wpcom_transport_enabled() ) {
+	$connection = Main::instance()->get_wpcom_connection();
+
+	if ( null === $connection ) {
+		$button_html = '<p>' . esc_html__( 'Jetpack connection package is unavailable. Reinstall plugin dependencies to enable this feature.', 'woocommerce-shipstation-integration' ) . '</p>';
+	} elseif ( $connection->is_connected() ) {
+		$wpcom_blog_id = $connection->get_blog_id();
+		$action_url    = wp_nonce_url(
+			admin_url( 'admin-post.php?action=shipstation_wpcom_disconnect' ),
+			'shipstation_wpcom_disconnect'
+		);
+		$button_html   = sprintf(
+			'<p><strong>%s</strong> %s</p><p><a href="%s" class="button">%s</a></p>',
+			esc_html__( 'Connected to WordPress.com.', 'woocommerce-shipstation-integration' ),
+			$wpcom_blog_id ? esc_html( sprintf( /* translators: %d: WordPress.com blog id */ __( 'Blog ID: %d', 'woocommerce-shipstation-integration' ), $wpcom_blog_id ) ) : '',
+			esc_url( $action_url ),
+			esc_html__( 'Disconnect from WordPress.com', 'woocommerce-shipstation-integration' )
+		);
+	} else {
+		$action_url  = wp_nonce_url(
+			admin_url( 'admin-post.php?action=shipstation_wpcom_connect' ),
+			'shipstation_wpcom_connect'
+		);
+		$button_html = sprintf(
+			'<p><a href="%s" class="button button-primary">%s</a></p>',
+			esc_url( $action_url ),
+			esc_html__( 'Connect to WordPress.com', 'woocommerce-shipstation-integration' )
+		);
+	}
+
+	$fields['wpcom_connection'] = array(
+		'title'       => __( 'WordPress.com Connection', 'woocommerce-shipstation-integration' ),
+		'type'        => 'title',
+		'description' => $button_html . '<p class="description">' . esc_html__( 'Connecting to WordPress.com lets ShipStation reach your store through the Jetpack channel, bypassing firewall and security-plugin blocks that can intercept direct requests. (Experimental.)', 'woocommerce-shipstation-integration' ) . '</p>',
+	);
+}
 
 return $fields;

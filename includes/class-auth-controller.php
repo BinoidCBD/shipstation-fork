@@ -119,6 +119,48 @@ class Auth_Controller {
 	}
 
 	/**
+	 * Return the first admin user ID to assign as the API key owner.
+	 *
+	 * WooCommerce REST auth runs every request under the key owner's capabilities.
+	 * Tying the key to the triggering user is unsafe: that user may later lose their
+	 * role or be deleted, causing every REST endpoint to return rest_forbidden.
+	 * Using the first administrator keeps the key stable.
+	 *
+	 * @return int
+	 */
+	private function get_admin_user_id(): int {
+		// Try site-level administrators first (works on single site and multisite).
+		$admins = get_users(
+			array(
+				'role'        => 'administrator',
+				'number'      => 1,
+				'orderby'     => 'ID',
+				'order'       => 'ASC',
+				'fields'      => 'ID',
+				'count_total' => false,
+			)
+		);
+
+		if ( ! empty( $admins ) ) {
+			return (int) $admins[0];
+		}
+
+		// On multisite, fall back to the first network super admin.
+		// get_users() only queries site-level roles, so super admins who haven't
+		// been explicitly added to this site won't appear in the query above.
+		if ( is_multisite() ) {
+			$super_admins = get_super_admins();
+			$user         = ! empty( $super_admins ) ? get_user_by( 'login', $super_admins[0] ) : false;
+
+			if ( $user ) {
+				return $user->ID;
+			}
+		}
+
+		return get_current_user_id();
+	}
+
+	/**
 	 * Generate new WooCommerce REST API credentials.
 	 *
 	 * @return array API credentials.
@@ -131,7 +173,7 @@ class Auth_Controller {
 		$table_name      = $wpdb->prefix . 'woocommerce_api_keys';
 
 		$data = array(
-			'user_id'         => get_current_user_id(),
+			'user_id'         => $this->get_admin_user_id(),
 			'description'     => __( 'ShipStation Integration', 'woocommerce-shipstation-integration' ),
 			'permissions'     => 'read_write',
 			'consumer_key'    => wc_api_hash( $consumer_key ),

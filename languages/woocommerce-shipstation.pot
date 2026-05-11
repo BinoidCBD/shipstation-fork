@@ -2,10 +2,10 @@
 # This file is distributed under the GPLv3.
 msgid ""
 msgstr ""
-"Project-Id-Version: ShipStation for WooCommerce 4.9.8\n"
+"Project-Id-Version: ShipStation for WooCommerce 5.0.4\n"
 "Report-Msgid-Bugs-To: "
 "https://wordpress.org/support/plugin/woocommerce-shipstation\n"
-"POT-Creation-Date: 2026-03-23 04:45:13+00:00\n"
+"POT-Creation-Date: 2026-05-05 09:32:40+00:00\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -18,22 +18,17 @@ msgstr ""
 msgid "Invalid start_date or end_date format."
 msgstr ""
 
-#: includes/api/requests/class-wc-shipstation-api-export.php:170
-#: includes/api/rest/class-orders-controller.php:447
+#: includes/api/requests/class-wc-shipstation-api-export.php:171
+#: includes/api/rest/class-orders-controller.php:469
 #. translators: 1: order id
 msgid "Order %s can not be found."
 msgstr ""
 
-#: includes/api/requests/class-wc-shipstation-api-export.php:480
+#: includes/api/requests/class-wc-shipstation-api-export.php:483
 msgid "Total Discount"
 msgstr ""
 
-#: includes/api/requests/class-wc-shipstation-api-export.php:509
-#: includes/api/rest/class-orders-controller.php:455
-msgid "Order has been exported to Shipstation"
-msgstr ""
-
-#: includes/api/requests/class-wc-shipstation-api-export.php:521
+#: includes/api/requests/class-wc-shipstation-api-export.php:520
 #. translators: 1: total count
 msgid "Exported %s orders"
 msgstr ""
@@ -71,54 +66,54 @@ msgid "Invalid order ID: %s"
 msgstr ""
 
 #: includes/api/requests/class-wc-shipstation-api-shipnotify.php:175
-#: includes/api/rest/class-orders-controller.php:1367
+#: includes/api/rest/class-orders-controller.php:1718
 msgid "ShipNotify Item: "
 msgstr ""
 
 #: includes/api/requests/class-wc-shipstation-api-shipnotify.php:188
-#: includes/api/rest/class-orders-controller.php:1452
+#: includes/api/rest/class-orders-controller.php:1803
 #. translators: 1: item name
 msgid "Item %s is not shippable product. Skipping."
 msgstr ""
 
 #: includes/api/requests/class-wc-shipstation-api-shipnotify.php:206
-#: includes/api/rest/class-orders-controller.php:1468
+#: includes/api/rest/class-orders-controller.php:1819
 #. translators: 1) shipped items 2) carrier's name 3) shipped date, 4) tracking
 #. number
 msgid "%1$s shipped via %2$s on %3$s with tracking number %4$s."
 msgstr ""
 
 #: includes/api/requests/class-wc-shipstation-api-shipnotify.php:222
-#: includes/api/rest/class-orders-controller.php:1484
+#: includes/api/rest/class-orders-controller.php:1835
 #. translators: 1) number of shipped items 2) total shipped items 3) order ID
 msgid "Shipped %1$d out of %2$d items in order %3$s"
 msgstr ""
 
 #: includes/api/requests/class-wc-shipstation-api-shipnotify.php:238
-#: includes/api/rest/class-orders-controller.php:1499
+#: includes/api/rest/class-orders-controller.php:1850
 #. translators: 1) carrier's name 2) shipped date, 3) tracking number
 msgid "Items shipped via %1$s on %2$s with tracking number %3$s (Shipstation)."
 msgstr ""
 
 #: includes/api/requests/class-wc-shipstation-api-shipnotify.php:245
-#: includes/api/rest/class-orders-controller.php:1506
+#: includes/api/rest/class-orders-controller.php:1857
 #. translators: 1: order id
 msgid "No items found - shipping entire order %d."
 msgstr ""
 
 #: includes/api/requests/class-wc-shipstation-api-shipnotify.php:347
-#: includes/api/rest/class-orders-controller.php:1609
+#: includes/api/rest/class-orders-controller.php:1960
 #. translators: 1) order ID 2) shipment status
 msgid "Updated order %1$s to status %2$s"
 msgstr ""
 
 #: includes/api/rest/class-inventory-controller.php:54
-#: includes/api/rest/class-orders-controller.php:170
+#: includes/api/rest/class-orders-controller.php:173
 msgid "Page number of the results to return."
 msgstr ""
 
 #: includes/api/rest/class-inventory-controller.php:65
-#: includes/api/rest/class-orders-controller.php:181
+#: includes/api/rest/class-orders-controller.php:184
 msgid "Maximum number of items to return per page (1–500)."
 msgstr ""
 
@@ -170,85 +165,85 @@ msgstr ""
 msgid "No inventory changes made."
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:160
+#: includes/api/rest/class-orders-controller.php:163
 msgid ""
 "Return orders modified after this date/time (ISO8601, UTC). Leave empty to "
 "ignore."
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:192
+#: includes/api/rest/class-orders-controller.php:195
 msgid ""
 "Mapping of WooCommerce order statuses to ShipStation statuses. Format: "
 "wc_status:ShipStationStatus (e.g., processing:AwaitingShipment). Accepts "
 "multiple values."
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:364
+#: includes/api/rest/class-orders-controller.php:375
 msgid ""
 "No order statuses provided in the request. Using default export statuses "
 "from the settings."
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:397
+#: includes/api/rest/class-orders-controller.php:408
 msgid "Error retrieving orders."
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:484
+#: includes/api/rest/class-orders-controller.php:571
 #. translators: 1: order id, 2: WC order status, 3: shipstation order status.
 msgid ""
 "Order %1$s has an unmapped WooCommerce status (%2$s). Defaulting to "
 "ShipStation status \"%3$s\". Please review your status mappings."
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:636
+#: includes/api/rest/class-orders-controller.php:758
 #. translators: %1$s is a coupon code.
 msgid "Discount from coupon: %1$s"
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:660
+#: includes/api/rest/class-orders-controller.php:782
 msgid "Additional Discount"
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:1070
+#: includes/api/rest/class-orders-controller.php:1412
 msgid "Tax"
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:1276
+#: includes/api/rest/class-orders-controller.php:1625
 msgid "Notification ID is empty for this notification: "
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:1284
+#: includes/api/rest/class-orders-controller.php:1633
 msgid "Empty order ID or items"
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:1288
+#: includes/api/rest/class-orders-controller.php:1637
 #. translators: %1$s is the notification id.
 msgid "Notification ID: %1$s doesnt have order ID or items."
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:1297
+#: includes/api/rest/class-orders-controller.php:1646
 msgid "Order ID is not numeric"
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:1301
+#: includes/api/rest/class-orders-controller.php:1650
 #. translators: %1$s is the order id, %2$d is the notification id.
 msgid "Order ID: %1$d from notification ID: %2$s is not numeric."
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:1321
+#: includes/api/rest/class-orders-controller.php:1670
 msgid "Order not found"
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:1327
+#: includes/api/rest/class-orders-controller.php:1676
 #. translators: %1$d is the order ID, %2$s is the order number.
 msgid "Order ID: %1$d or Order number: %2$s cannot be found."
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:1342
+#: includes/api/rest/class-orders-controller.php:1691
 msgid "Skipped this item because doesnt have description and quantity: "
 msgstr ""
 
-#: includes/api/rest/class-orders-controller.php:1520
+#: includes/api/rest/class-orders-controller.php:1871
 msgid "You're using Shipment Tracking < 1.4.0. Please update!"
 msgstr ""
 
@@ -288,28 +283,29 @@ msgid ""
 "them will stop working until you update ShipStation. Continue?"
 msgstr ""
 
-#: includes/class-auth-controller.php:135
+#: includes/class-auth-controller.php:177
 msgid "ShipStation Integration"
 msgstr ""
 
-#: includes/class-auth-controller.php:236
-#: includes/class-auth-controller.php:264
+#: includes/class-auth-controller.php:278
+#: includes/class-auth-controller.php:306
 msgid "Security check failed"
 msgstr ""
 
-#: includes/class-auth-controller.php:241
-#: includes/class-auth-controller.php:269
+#: includes/class-auth-controller.php:283
+#: includes/class-auth-controller.php:311
+#: includes/class-wpcom-connection.php:460
 msgid "You do not have sufficient permissions."
 msgstr ""
 
-#: includes/class-auth-controller.php:251
-#: includes/class-auth-controller.php:275
+#: includes/class-auth-controller.php:293
+#: includes/class-auth-controller.php:317
 msgid ""
 "Failed to generate API credentials. Please try again or contact your "
 "hosting provider if the issue persists."
 msgstr ""
 
-#: includes/class-auth-controller.php:309
+#: includes/class-auth-controller.php:351
 msgid "View Authentication Data"
 msgstr ""
 
@@ -378,39 +374,43 @@ msgstr ""
 msgid "Additional information"
 msgstr ""
 
-#: includes/class-main.php:67
+#: includes/class-main.php:75
 #. translators: %s WC download URL link.
 msgid ""
 "Shipstation requires WooCommerce to be installed and active. You can "
 "download %s here."
 msgstr ""
 
-#: includes/class-main.php:193
+#: includes/class-main.php:249
 msgid "Settings"
 msgstr ""
 
-#: includes/class-main.php:194
+#: includes/class-main.php:250
 msgid "Support"
 msgstr ""
 
-#: includes/class-main.php:195
+#: includes/class-main.php:251
 msgid "Docs"
 msgstr ""
 
-#: includes/class-wc-shipstation-api.php:71
+#: includes/class-order-util.php:527
+msgid "Order has been exported to Shipstation"
+msgstr ""
+
+#: includes/class-wc-shipstation-api.php:74
 msgid "Authentication key is required!"
 msgstr ""
 
-#: includes/class-wc-shipstation-api.php:75
+#: includes/class-wc-shipstation-api.php:78
 msgid "Invalid authentication key"
 msgstr ""
 
-#: includes/class-wc-shipstation-api.php:83
-#: includes/class-wc-shipstation-api.php:100
+#: includes/class-wc-shipstation-api.php:86
+#: includes/class-wc-shipstation-api.php:103
 msgid "Invalid request"
 msgstr ""
 
-#: includes/class-wc-shipstation-api.php:96
+#: includes/class-wc-shipstation-api.php:99
 #. translators: 1: query string
 msgid "Input params: %s"
 msgstr ""
@@ -502,146 +502,201 @@ msgstr ""
 msgid "ShipStation Order Data Erased."
 msgstr ""
 
-#: includes/data/data-settings.php:20
-msgid "Authentication Key"
+#: includes/class-wpcom-connection.php:356
+msgid "Successfully connected to WordPress.com."
+msgstr ""
+
+#: includes/class-wpcom-connection.php:357
+msgid "Could not connect to WordPress.com. Please try again."
+msgstr ""
+
+#: includes/class-wpcom-connection.php:361
+msgid "Disconnected from WordPress.com."
+msgstr ""
+
+#: includes/class-wpcom-connection.php:362
+msgid "Could not disconnect from WordPress.com. Please try again."
+msgstr ""
+
+#: includes/class-wpcom-connection.php:456
+msgid "Security check failed."
 msgstr ""
 
 #: includes/data/data-settings.php:24
+msgid "Authentication Key"
+msgstr ""
+
+#: includes/data/data-settings.php:28
 msgid ""
 "This is the <code>Auth Key</code> you set in ShipStation and allows "
 "ShipStation to communicate with your store."
 msgstr ""
 
-#: includes/data/data-settings.php:32
+#: includes/data/data-settings.php:36
 msgid "Export Order Statuses&hellip;"
 msgstr ""
 
-#: includes/data/data-settings.php:37
+#: includes/data/data-settings.php:41
 msgid "Define the order statuses you wish to export to ShipStation."
 msgstr ""
 
-#: includes/data/data-settings.php:40
+#: includes/data/data-settings.php:44
 msgid "Select Order Statuses"
 msgstr ""
 
-#: includes/data/data-settings.php:44
+#: includes/data/data-settings.php:48
 msgid "Shipped Order Status&hellip;"
 msgstr ""
 
-#: includes/data/data-settings.php:47
+#: includes/data/data-settings.php:51
 msgid ""
 "Define the order status you wish to update to once an order has been "
 "shipping via ShipStation. By default this is \"Completed\"."
 msgstr ""
 
-#: includes/data/data-settings.php:52
+#: includes/data/data-settings.php:56
 msgid "API Mode"
 msgstr ""
 
-#: includes/data/data-settings.php:54
+#: includes/data/data-settings.php:58
 msgid "Current API mode."
 msgstr ""
 
-#: includes/data/data-settings.php:62
+#: includes/data/data-settings.php:66
 msgid "Status Mapping Mode"
 msgstr ""
 
-#: includes/data/data-settings.php:65
+#: includes/data/data-settings.php:69
 msgid "API"
 msgstr ""
 
-#: includes/data/data-settings.php:66
+#: includes/data/data-settings.php:70
 msgid "Plugin"
 msgstr ""
 
-#: includes/data/data-settings.php:68
+#: includes/data/data-settings.php:72
 msgid "Define how the order status will be mapped."
 msgstr ""
 
-#: includes/data/data-settings.php:73
+#: includes/data/data-settings.php:77
 msgid "Awaiting Payment"
 msgstr ""
 
-#: includes/data/data-settings.php:77
+#: includes/data/data-settings.php:81
 msgid ""
 "Define the order status you wish to map for ShipStation \"AwaitingPayment\" "
 "status. By default this is \"pending\"."
 msgstr ""
 
-#: includes/data/data-settings.php:82
+#: includes/data/data-settings.php:86
 msgid "Awaiting Shipment"
 msgstr ""
 
-#: includes/data/data-settings.php:86
+#: includes/data/data-settings.php:90
 msgid ""
 "Define the order status you wish to map for ShipStation "
 "\"AwaitingShipment\" status. By default this is \"processing\"."
 msgstr ""
 
-#: includes/data/data-settings.php:91
+#: includes/data/data-settings.php:95
 msgid "OnHold"
 msgstr ""
 
-#: includes/data/data-settings.php:95
+#: includes/data/data-settings.php:99
 msgid ""
 "Define the order status you wish to map for ShipStation \"OnHold\" status. "
 "By default this is \"on-hold\"."
 msgstr ""
 
-#: includes/data/data-settings.php:100
+#: includes/data/data-settings.php:104
 msgid "Completed"
 msgstr ""
 
-#: includes/data/data-settings.php:104
+#: includes/data/data-settings.php:108
 msgid ""
 "Define the order status you wish to map for ShipStation \"Completed\" "
 "status. By default this is \"completed\"."
 msgstr ""
 
-#: includes/data/data-settings.php:109
+#: includes/data/data-settings.php:113
 msgid "Cancelled"
 msgstr ""
 
-#: includes/data/data-settings.php:113
+#: includes/data/data-settings.php:117
 msgid ""
 "Define the order status you wish to map for ShipStation \"Cancelled\" "
 "status. By default this is \"cancelled\"."
 msgstr ""
 
-#: includes/data/data-settings.php:118
+#: includes/data/data-settings.php:122
 msgid "Gift"
 msgstr ""
 
-#: includes/data/data-settings.php:119
+#: includes/data/data-settings.php:123
 msgid "Enable Gift options at checkout page"
 msgstr ""
 
-#: includes/data/data-settings.php:121
+#: includes/data/data-settings.php:125
 msgid ""
 "Allow customer to mark their order as a gift and include a personalized "
 "message."
 msgstr ""
 
-#: includes/data/data-settings.php:122
+#: includes/data/data-settings.php:126
 msgid "Enable gift fields on the checkout page."
 msgstr ""
 
-#: includes/data/data-settings.php:126
+#: includes/data/data-settings.php:130
 msgid "Logging"
 msgstr ""
 
-#: includes/data/data-settings.php:127
+#: includes/data/data-settings.php:131
 msgid "Enable Logging"
 msgstr ""
 
-#: includes/data/data-settings.php:129
+#: includes/data/data-settings.php:133
 msgid ""
 "Note: this may log personal information. We recommend using this for "
 "debugging purposes only and deleting the logs when finished."
 msgstr ""
 
-#: includes/data/data-settings.php:130
+#: includes/data/data-settings.php:134
 msgid "Log all API interactions."
+msgstr ""
+
+#: includes/data/data-settings.php:143
+msgid ""
+"Jetpack connection package is unavailable. Reinstall plugin dependencies to "
+"enable this feature."
+msgstr ""
+
+#: includes/data/data-settings.php:152
+msgid "Connected to WordPress.com."
+msgstr ""
+
+#: includes/data/data-settings.php:153
+#. translators: %d: WordPress.com blog id
+msgid "Blog ID: %d"
+msgstr ""
+
+#: includes/data/data-settings.php:155
+msgid "Disconnect from WordPress.com"
+msgstr ""
+
+#: includes/data/data-settings.php:165
+#: vendor/automattic/jetpack-connection/src/class-connection-notice.php:202
+msgid "Connect to WordPress.com"
+msgstr ""
+
+#: includes/data/data-settings.php:170
+msgid "WordPress.com Connection"
+msgstr ""
+
+#: includes/data/data-settings.php:172
+msgid ""
+"Connecting to WordPress.com lets ShipStation reach your store through the "
+"Jetpack channel, bypassing firewall and security-plugin blocks that can "
+"intercept direct requests. (Experimental.)"
 msgstr ""
 
 #: templates/auth-modal.php:14
@@ -695,6 +750,835 @@ msgstr ""
 
 #: templates/auth-modal.php:96
 msgid "Generate new REST-API keys"
+msgstr ""
+
+#: vendor/automattic/jetpack-admin-ui/src/class-admin-menu.php:61
+msgid "Akismet Anti-spam"
+msgstr ""
+
+#: vendor/automattic/jetpack-admin-ui/src/class-admin-menu.php:61
+msgid "Anti-spam"
+msgstr ""
+
+#: vendor/automattic/jetpack-assets/src/class-assets.php:407
+#. translators: %s is the script handle.
+msgid "Script \"%s\" depends on wp-i18n but does not specify \"textdomain\""
+msgstr ""
+
+#: vendor/automattic/jetpack-assets/src/class-assets.php:580
+#. translators: 1: wp_default_scripts. 2: Name of the domain being aliased.
+msgid ""
+"Textdomain aliases should be registered before the %1$s hook. This notice "
+"was triggered by the %2$s domain."
+msgstr ""
+
+#: vendor/automattic/jetpack-config/src/class-config.php:188
+#. translators: %1$s is a PHP class name.
+msgid ""
+"Unable to load class %1$s. Please add the package that contains it using "
+"composer and make sure you are requiring the Jetpack autoloader"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:162
+msgid "Invalid user identifier."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:175
+msgid "User not found."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:284
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:385
+msgid "Valid user is required"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:297
+msgid "The required \"nonce\" parameter is missing."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:321
+msgid "There was an issue validating this request."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:342
+msgid "There was an unspecified error registering the site"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:367
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:446
+msgid "Blog is already registered"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:452
+msgid "Jetpack is already connected."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:465
+msgid "Valid user is required."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:476
+msgid "A non-empty nonce must be supplied."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:500
+msgid "Failed to fetch user token from WordPress.com."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php:531
+msgid "The required \"local_user\" parameter is missing."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-authorize-json-api.php:48
+#: vendor/automattic/jetpack-connection/src/class-authorize-json-api.php:54
+msgid "You must connect your Jetpack plugin to WordPress.com to use this feature."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-authorize-json-api.php:57
+msgid ""
+"Someone may be trying to trick you into giving them access to your site. Or "
+"it could be you just encountered a bug :).  Either way, please close this "
+"window."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-authorize-json-api.php:71
+#. translators: %s is a URL
+msgid ""
+"Your site is incorrectly double-encoding redirects from http to https. This "
+"is preventing Jetpack from authenticating your connection. Please visit our "
+"<a href=\"%s\">support page</a> for details about how to resolve this."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-authorize-json-api.php:164
+msgid "The authorization process expired. Please go back and try again."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-authorize-json-api.php:277
+#. translators: Name/image of the client requesting authorization
+msgid "%s wants to access your site’s data. Log in to authorize that access."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-connection-notice.php:112
+msgid "Important notice about your Jetpack connection:"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-connection-notice.php:115
+#. translators: WordPress User, if available.
+msgid ""
+"Warning! You are about to delete the Jetpack connection owner (%s) for this "
+"site, which may cause some of your Jetpack features to stop working."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-connection-notice.php:121
+msgid ""
+"You can choose to transfer connection ownership to one of these "
+"already-connected admins:"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-connection-notice.php:139
+msgid "Set new connection owner"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-connection-notice.php:166
+msgid "Something went wrong. Please try again."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-connection-notice.php:183
+msgid "Success!"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-connection-notice.php:199
+msgid ""
+"Every Jetpack site needs at least one connected admin for the features to "
+"work properly. Please connect to your WordPress.com account via the button "
+"below. Once you connect, you may refresh this page to see an option to "
+"change the connection owner."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-connection-notice.php:209
+#. translators: URL to Jetpack support doc regarding the primary user.
+msgid ""
+"<a href='%s' target='_blank' rel='noopener noreferrer'>Learn more</a> about "
+"the connection owner and what will break if you do not have one."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-connection-notice.php:225
+#. translators: URL to contact Jetpack support.
+msgid ""
+"As always, feel free to <a href=\"%s\" target=\"_blank\" rel=\"noopener "
+"noreferrer\">contact our support team</a> if you have any questions."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-error-handler.php:728
+msgid ""
+"Your connection with WordPress.com seems to be broken. If you're "
+"experiencing issues, please try reconnecting."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-heartbeat.php:236
+#. translators: %s is a command like "prompt"
+msgid "%s is not a valid command."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-heartbeat.php:256
+#. translators: %s is the full datetime of the last heart beat e.g. 2020-01-01
+#. 12:21:23
+msgid "Last heartbeat sent at: %s"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-heartbeat.php:275
+msgid "Prefix to add before the stats identifiers."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:1082
+msgid "New owner is not admin"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:1092
+msgid "New owner is same as existing owner"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:1100
+msgid "New owner is not connected"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:1120
+msgid "Could not confirm new owner."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:1216
+msgid ""
+"Jetpack experienced an issue trying to save options (cannot_save_secrets). "
+"We suggest that you contact your hosting provider, and ask them for help "
+"checking that the options table is writable on your site."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:1489
+msgid ""
+"PHP's XML extension is not available. Jetpack requires the XML extension to "
+"communicate with WordPress.com. Please contact your hosting provider to "
+"enable PHP's XML extension."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:1510
+#. translators: %s is an error message string
+msgid ""
+"Error Details: Jetpack ID is empty. Do not publicly post this error "
+"message! %s"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:1517
+#. translators: %s is an error message string
+msgid ""
+"Error Details: Jetpack ID is not a scalar. Do not publicly post this error "
+"message! %s"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:1524
+#. translators: %s is an error message string
+msgid ""
+"Error Details: Jetpack ID begins with a numeral. Do not publicly post this "
+"error message! %s"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:1934
+msgid "Invalid Registration State"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2308
+#. translators: %1$s is a domain name.
+msgid "Domain `%1$s` just failed is_usable_domain check as it is empty."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2341
+#. translators: %1$s is a domain name.
+msgid ""
+"Domain `%1$s` just failed is_usable_domain check as it is in the forbidden "
+"array."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2356
+#. translators: %1$s is a domain name.
+msgid ""
+"Domain `%1$s` just failed is_usable_domain check as it uses an invalid top "
+"level domain."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2371
+#. translators: %1$s is a domain name.
+msgid ""
+"Domain `%1$s` just failed is_usable_domain check as it is a subdomain of "
+"WordPress.com."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2395
+#. translators: %1$s is a domain name.
+msgid ""
+"IP address `%1$s` just failed is_usable_domain check as it is in the "
+"private network."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2481
+msgid "The WP.com user ID of the connected user"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2486
+msgid "The WP.com username of the connected user"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2491
+msgid "The WP.com user email of the connected user"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2496
+msgid "The number of sites of the connected WP.com user"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2518
+msgid "Jetpack Plugin Version"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2524
+msgid "The Client ID/WP.com Blog ID of this site"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2673
+#: vendor/automattic/jetpack-connection/src/class-tokens.php:225
+#. translators: Error description string.
+msgid "Error Details: %s"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-manager.php:2748
+msgid "Sorry, something is wrong with your Jetpack connection."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-plugin-storage.php:131
+msgid "You cannot call this method until Jetpack Config is configured"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-authentication.php:125
+msgid "The request method is missing."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-authentication.php:138
+msgid "This request method is not supported."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-authentication.php:146
+msgid "This request method does not support body parameters."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-authentication.php:180
+msgid "The request is not signed correctly."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:56
+#: vendor/automattic/jetpack-connection/src/identity-crisis/class-rest-endpoints.php:221
+msgid ""
+"You do not have the correct user permissions to perform this action.\n"
+"\t\t\tPlease contact your site admin if you think this is a mistake."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:152
+msgid "Set to false will trigger the site to disconnect."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:157
+msgid "The isActive argument should be set to false."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:232
+msgid ""
+"Indicates where the registration action was triggered for "
+"tracking/segmentation purposes"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:236
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:257
+#: vendor/automattic/jetpack-connection/src/identity-crisis/class-rest-endpoints.php:62
+msgid ""
+"URI of the admin page where the user should be redirected after connection "
+"flow"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:240
+msgid "Indicates from what plugin the request is coming from"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:274
+msgid "New user token"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:279
+msgid "Is connection owner"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:297
+msgid "New owner"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:917
+msgid "Invalid user token is provided"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:923
+msgid "Invalid user id is provided"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:929
+msgid "Site is not connected"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:972
+msgid "Failed to disconnect the site as it appears already disconnected."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:989
+msgid "Invalid Parameter"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:999
+msgid "Unable to unlink the connection owner."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-rest-connector.php:1019
+msgid "Was not able to unlink the user. Please try again."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-secrets.php:187
+#: vendor/automattic/jetpack-connection/src/class-secrets.php:206
+#. translators: "%s" is the name of a paramter. It can be either "secret_1" or
+#. "state".
+msgid "The required \"%s\" parameter is missing."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-secrets.php:196
+#: vendor/automattic/jetpack-connection/src/class-secrets.php:215
+#. translators: "%s" is the name of a paramter. It can be either "secret_1" or
+#. "state".
+msgid "The required \"%s\" parameter is malformed."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-secrets.php:223
+msgid "Verification secrets not found"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-secrets.php:231
+msgid "Verification took too long"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-secrets.php:239
+msgid "Verification secrets are empty"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-secrets.php:250
+msgid "Verification secrets are incomplete"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-secrets.php:258
+msgid "Secret mismatch"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-tokens.php:132
+msgid "An administrator for this blog must set up the Jetpack connection."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-tokens.php:137
+msgid "You need to register your Jetpack before connecting it."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-tokens.php:381
+msgid "No user tokens found"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-tokens.php:386
+msgid "No primary user defined"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-tokens.php:391
+#. translators: %s is the user ID.
+msgid "No token for user %d"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-tokens.php:396
+#. translators: %s is the user ID.
+msgid "Token for user %d is malformed"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-tokens.php:400
+#. translators: %1$d is the ID of the requested user. %2$d is the user ID found
+#. in the token.
+msgid "Requesting user_id %1$d does not match token user_id %2$d"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-tokens.php:431
+msgid "No blog token found"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-tokens.php:458
+#. translators: %d is the user ID.
+msgid "Invalid token for user %d"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-tokens.php:460
+msgid "Invalid blog token"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-tracking.php:78
+msgid "You aren’t authorized to do that."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-tracking.php:85
+msgid "No valid event name or type."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-users-connection-admin.php:58
+msgid "WordPress.com account"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-users-connection-admin.php:59
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:1199
+msgid "Tooltip"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-users-connection-admin.php:80
+msgid "This user has connected their WordPress.com account."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-users-connection-admin.php:81
+msgid "Connected"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/class-users-connection-admin.php:116
+msgid ""
+"Connecting a WordPress.com account unlocks Jetpack’s full suite of features "
+"including secure logins."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/identity-crisis/class-identity-crisis.php:244
+msgid "Jetpack Safe Mode"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/identity-crisis/class-identity-crisis.php:451
+#. translators: %s: URL to parse.
+msgid "Cannot parse URL %s"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/identity-crisis/class-rest-endpoints.php:101
+msgid "URL secret to compare to the ones stored in the database."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/identity-crisis/class-rest-endpoints.php:130
+msgid "Could not confirm safe mode."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/identity-crisis/class-rest-endpoints.php:147
+msgid "Could not delete sync error option."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/identity-crisis/class-rest-endpoints.php:161
+msgid "Could not confirm migration."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/identity-crisis/class-rest-endpoints.php:253
+msgid "URL secret does not exist."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/identity-crisis/class-rest-endpoints.php:302
+msgid "You do not have the correct user permissions to perform this action."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/identity-crisis/class-rest-endpoints.php:317
+msgid "The endpoint is not available on connected sites."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/identity-crisis/class-url-secret.php:92
+msgid "Unable to save new URL secret"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-force-2fa.php:76
+msgid "Jetpack Force 2FA requires Jetpack’s SSO feature."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-notices.php:32
+#. translators: URL to settings page
+msgid ""
+"Two-Step Authentication is required to access this site. Please visit your "
+"<a href=\"%1$s\" rel=\"noopener noreferrer\" target=\"_blank\">Security "
+"Settings</a> to configure <a href=\"%2$s\" rel=\"noopener noreferrer\" "
+"target=\"_blank\">Two-step Authentication</a> for your account."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-notices.php:59
+#. translators: login URL
+msgid ""
+"You already have an account on this site. Please <a href=\"%1$s\">sign "
+"in</a> with your username and password and then connect to WordPress.com."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-notices.php:83
+msgid ""
+"Logging in with WordPress.com is not currently available because this site "
+"is experiencing connection problems."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-notices.php:99
+msgid ""
+"There was an error logging you in via WordPress.com, please try again or "
+"try logging in with your username and password."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-notices.php:118
+msgid ""
+"There was an error creating a user for you. Please contact the "
+"administrator of your site."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-notices.php:167
+msgid ""
+"A WordPress.com account is required to access this site. Click the button "
+"below to sign in or create a free WordPress.com account."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-notices.php:192
+msgid ""
+"We couldn't find your account. If you already have an account, make sure "
+"you have connected to WordPress.com."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-notices.php:225
+msgid ""
+"Logging in with WordPress.com is disabled for sites that are in staging "
+"mode."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-notices.php:254
+msgid "Logging in with WordPress.com is disabled for sites that are in safe mode."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:168
+#. translators: %1$s is a link to the WordPress.com account settings page.
+msgid ""
+"If you are on a shared computer, remember to also <a href=\"%1$s\">log out "
+"of WordPress.com</a>."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:317
+msgid "Secure Sign On"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:373
+msgid "Require Two-Step Authentication"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:405
+msgid "Match by Email"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:548
+msgid "Cannot deal with cookie redirects, as headers are already sent."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:610
+#. translators: %s a user display name.
+msgid "Log in as <span>%s</span>"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:625
+msgid "Log in as a different WordPress.com user"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:643
+#. Translators: %s is the name of the site.
+msgid ""
+"You can now save time spent logging in by connecting your WordPress.com "
+"account to %s."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:666
+msgid "Or"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:671
+msgid "Log in with username and password"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:677
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:1026
+msgid "Log in with WordPress.com"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:817
+msgid "You must have Two-Step Authentication enabled on your WordPress.com account."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:832
+msgid ""
+"Something got a little mixed up and an unexpected WordPress.com user logged "
+"in."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-sso.php:994
+msgid ""
+"Account not found. If you already have an account, make sure you have "
+"connected to WordPress.com."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:176
+msgid "User was invited successfully!"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:179
+msgid "User was re-invited successfully!"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:183
+msgid "User invite revoked successfully."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:193
+msgid "Tried to invite a user that doesn&#8217;t exist."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:195
+msgid "Tried to invite a user that doesn&#8217;t have an email address."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:197
+msgid "You don&#8217;t have permission to invite users."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:199
+msgid "Tried to revoke an invite for a user that doesn&#8217;t exist."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:201
+msgid "Tried to revoke an invite that doesn&#8217;t exist."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:203
+msgid "You don&#8217;t have permission to revoke invites."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:205
+msgid "There is no previous invite for this user"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:207
+msgid ""
+"Attempted to send a new invitation to a user using an invite that "
+"doesn&#8217;t exist."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:209
+msgid "An error has occurred when revoking the invite for the user."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:211
+msgid "An error has occurred when revoking the user invite."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:213
+msgid "An error has occurred when inviting the user to the site."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:606
+msgid "Revoke invite"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:622
+msgid "Resend invite"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:644
+msgid ""
+"We highly recommend inviting users to join WordPress.com and log in "
+"securely using <a "
+"class=\"jetpack-sso-admin-create-user-invite-message-link-sso\" "
+"rel=\"noopener noreferrer\" target=\"_blank\" "
+"href=\"https://jetpack.com/support/sso/\">Secure Sign On</a> to ensure "
+"maximum security and efficiency."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:700
+#. translators: %s is a comma-separated list of user logins.
+msgid ""
+"WordPress.com invitation will be automatically revoked for user: "
+"<strong>%s</strong>."
+msgid_plural ""
+"WordPress.com invitations will be automatically revoked for users: "
+"<strong>%s</strong>."
+msgstr[0] ""
+msgstr[1] ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:739
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:744
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:784
+msgid "Invite user"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:753
+msgid "Invite user to WordPress.com"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:779
+msgid "External User"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:792
+msgid "This user is a contractor, freelancer, consultant, or agency."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:817
+msgid "Custom Message"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:824
+msgid ""
+"This user will be invited to WordPress.com. You can include a personalized "
+"welcome message with the invitation."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:889
+msgid ""
+"<strong>Error</strong>: The custom message is too long. Please keep it "
+"under 500 characters."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:902
+msgid "<strong>Error</strong>: Invalid site ID."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:952
+msgid ""
+"<strong>Error</strong>: The user invitation email could not be sent, the "
+"user account was not created."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:1175
+msgid "This user didn&#8217;t accept the invitation to join this site yet."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:1176
+msgid "Pending invite"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:1197
+msgid "Send invite"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/sso/class-user-admin.php:1198
+msgid ""
+"This user doesn&#8217;t have a Jetpack SSO connection to WordPress.com. "
+"Invite them to the site to increase security and improve their experience."
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/traits/trait-wpcom-rest-api-proxy-request.php:85
+msgid "Please connect your user account to WordPress.com"
+msgstr ""
+
+#: vendor/automattic/jetpack-connection/src/traits/trait-wpcom-rest-api-proxy-request.php:118
+msgid "An unknown error occurred."
 msgstr ""
 
 #. Plugin Name of the plugin/theme

@@ -136,7 +136,8 @@ class WC_Shipstation_API_Export extends WC_Shipstation_API_Request {
 
 		$max_results = $total_orders_to_export->total;
 
-		$orders_xml = $xml->createElement( 'Orders' );
+		$orders_xml     = $xml->createElement( 'Orders' );
+		$orders_to_mark = array();
 
 		/**
 		 * Loop through each order ID and process for export.
@@ -278,8 +279,10 @@ class WC_Shipstation_API_Export extends WC_Shipstation_API_Request {
 			}
 
 			$this->xml_append( $order_xml, 'ShippingAmount', $shipping_total, false );
-			$this->xml_append( $order_xml, 'CustomerNotes', $order->get_customer_note() );
-			$this->xml_append( $order_xml, 'InternalNotes', implode( ' | ', Order_Util::get_order_notes( $order ) ) );
+			$this->xml_append( $order_xml, 'CustomerNotes', html_entity_decode( $order->get_customer_note(), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+
+			$order_notes = Order_Util::get_order_notes( $order );
+			$this->xml_append( $order_xml, 'InternalNotes', implode( ' | ', $order_notes['private'] ) );
 
 			// Maybe append the gift and gift message XML element.
 			if ( class_exists( 'WooCommerce\Shipping\ShipStation\Checkout' ) && $order->get_meta( Checkout::get_block_prefixed_meta_key( 'is_gift' ) ) ) {
@@ -288,7 +291,7 @@ class WC_Shipstation_API_Export extends WC_Shipstation_API_Request {
 				$gift_message = $order->get_meta( Checkout::get_block_prefixed_meta_key( 'gift_message' ) );
 
 				if ( ! empty( $gift_message ) ) {
-					$this->xml_append( $order_xml, 'GiftMessage', wp_specialchars_decode( $gift_message ) );
+					$this->xml_append( $order_xml, 'GiftMessage', html_entity_decode( $gift_message, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
 				}
 			}
 
@@ -503,14 +506,10 @@ class WC_Shipstation_API_Export extends WC_Shipstation_API_Request {
 			$orders_xml->appendChild( apply_filters( 'woocommerce_shipstation_export_order_xml', $order_xml ) );
 
 			++$exported;
-
-			// Add order note to indicate it has been exported to Shipstation.
-			if ( 'yes' !== $order->get_meta( '_shipstation_exported', true ) ) {
-				$order->add_order_note( __( 'Order has been exported to Shipstation', 'woocommerce-shipstation-integration' ) );
-				$order->update_meta_data( '_shipstation_exported', 'yes' );
-				$order->save_meta_data();
-			}
+			$orders_to_mark[] = $order;
 		}
+
+		Order_Util::mark_orders_exported_bulk( $orders_to_mark );
 
 		$orders_xml->setAttribute( 'page', $page );
 		$orders_xml->setAttribute( 'pages', ceil( $max_results / WC_SHIPSTATION_EXPORT_LIMIT ) );

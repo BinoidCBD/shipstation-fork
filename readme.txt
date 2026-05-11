@@ -3,11 +3,11 @@ Contributors: woocommerce, automattic, royho, akeda, mattyza, bor0, woothemes, d
 Tags: shipping, woocommerce, automattic
 Requires at least: 6.8
 Tested up to: 6.9
-WC tested up to: 10.6
-WC requires at least: 10.4
+WC tested up to: 10.7
+WC requires at least: 10.5
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 4.9.8
+Stable tag: 5.0.4
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -73,6 +73,29 @@ This commonly occurs when products and variations do not have a unique [stock-ke
 6. Manage every order from one dashboard, with a single login.
 
 == Changelog ==
+
+= 5.0.4 - 2026-05-05 =
+* Fix   - Prevent the "exported to ShipStation" marker from bumping the order's modified date, so ShipStation's incremental `modified_after` polls no longer re-fetch orders it already received.
+* Tweak - Enhance REST-API `/orders` endpoint performance.
+
+= 5.0.3 - 2026-04-27 =
+* Add   - Experimental WPCOM-brokered transport scaffolding (behind the `WC_SHIPSTATION_WPCOM_TRANSPORT` feature flag). Adds a "WordPress.com Connection" settings section that lets stores connect to WordPress.com via the Jetpack Connection package. No traffic is routed over the new channel yet.
+* Fix   - Avoid fatal error in REST shipnotify when an order line item references a deleted product.
+* Fix   - Enable WooCommerce consumer key/secret authentication for REST API requests made via the `?rest_route=` query parameter (plain permalink fallback).
+
+= 5.0.2 - 2026-04-17 =
+* Fix   - Decode HTML entities in order customer notes, internal notes, and gift messages before export so special characters (e.g. &, £, ') appear correctly in ShipStation rather than as HTML entities.
+* Fix   - Separate customer-facing order notes from internal notes in the REST API response so notes added for the buyer are exported as `NotesToBuyer` instead of being mixed into `InternalNotes`.
+* Fix   - Fall back to user account and shipping details for buyer name, email, and phone when billing fields are not populated.
+
+= 5.0.1 - 2026-04-15 =
+* Fix   - Assign REST API credentials to the site's first administrator to prevent `rest_forbidden` errors when key generation is triggered by a shop manager or other non-administrator account.
+
+= 5.0.0 - 2026-04-13 =
+* Add   - `returns` field to the REST API order response to expose refund and return data, enabling ShipStation to detect fully refunded/cancelled orders and update their status accordingly.
+* Fix   - Orders with fractional item quantities (e.g. 0.375 yards of fabric) now export correctly to ShipStation, with the original amount visible in the product details panel.
+* Fix   - Use the order's billing name and email for buyer details in the REST API response so ShipStation reflects the actual order contact rather than the linked customer account profile.
+* Tweak - WooCommerce 10.7 Compatibility.
 
 = 4.9.8 - 2026-03-23 =
 * Fix   - Decode HTML entities in item option names and values before export to prevent special characters (e.g. & and £) from appearing as HTML entities on ShipStation packing slips.

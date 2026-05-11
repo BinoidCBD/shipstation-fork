@@ -30,6 +30,13 @@ class Main {
 	protected static ?Main $instance = null;
 
 	/**
+	 * WPCOM connection facade. Null until the feature flag enables it.
+	 *
+	 * @var WPCOM_Connection|null
+	 */
+	protected ?WPCOM_Connection $wpcom_connection = null;
+
+	/**
 	 * Main Websparks People Singleton.
 	 *
 	 * Ensures only one instance is loaded or can be loaded.
@@ -53,6 +60,7 @@ class Main {
 		add_action( 'woocommerce_api_wc_shipstation', array( $this, 'load_api' ) );
 		add_filter( 'plugin_action_links_' . plugin_basename( WC_SHIPSTATION_FILE ), array( $this, 'api_plugin_action_links' ) );
 		add_action( 'before_woocommerce_init', array( $this, 'declare_hpos_compatibility' ) );
+		add_action( 'woocommerce_refund_created', array( $this, 'save_refund_meta_data' ), 10, 2 );
 	}
 
 	/**
@@ -83,11 +91,35 @@ class Main {
 		}
 
 		$this->load_files();
+		$this->maybe_init_wpcom_connection();
 
 		add_action( 'before_woocommerce_init', array( $this, 'before_woocommerce_init' ) );
 		add_action( 'woocommerce_init', array( $this, 'load_rest_api' ) );
 
 		add_filter( 'woocommerce_shipping_methods', array( $this, 'register_shipping_methods' ) );
+	}
+
+	/**
+	 * Bootstrap the WPCOM/Jetpack connection when the feature flag is on.
+	 *
+	 * @return void
+	 */
+	protected function maybe_init_wpcom_connection(): void {
+		if ( ! Features::is_wpcom_transport_enabled() ) {
+			return;
+		}
+
+		$this->wpcom_connection = new WPCOM_Connection();
+		$this->wpcom_connection->bootstrap();
+	}
+
+	/**
+	 * WPCOM connection facade accessor.
+	 *
+	 * @return WPCOM_Connection|null Null when the feature flag is off.
+	 */
+	public function get_wpcom_connection(): ?WPCOM_Connection {
+		return $this->wpcom_connection;
 	}
 
 	/**
@@ -107,6 +139,7 @@ class Main {
 	public function load_files() {
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/class-features.php';
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/class-order-util.php';
+		require_once WC_SHIPSTATION_ABSPATH . 'includes/class-wpcom-connection.php';
 		include_once WC_SHIPSTATION_ABSPATH . 'includes/class-wc-shipstation-integration.php';
 		include_once WC_SHIPSTATION_ABSPATH . 'includes/class-auth-controller.php';
 		include_once WC_SHIPSTATION_ABSPATH . 'includes/class-logger.php';
@@ -122,6 +155,7 @@ class Main {
 			include_once WC_SHIPSTATION_ABSPATH . 'includes/class-checkout.php';
 		}
 	}
+
 	/**
 	 * Initialize REST API.
 	 *
@@ -162,7 +196,10 @@ class Main {
 			return $methods;
 		}
 
+		require_once WC_SHIPSTATION_ABSPATH . 'includes/checkout/interface-checkout-rates-api-client.php';
+		require_once WC_SHIPSTATION_ABSPATH . 'includes/checkout/class-checkout-rates-request-builder.php';
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/checkout/class-checkout-rates-shipping-method.php';
+
 		$methods['shipstation_checkout_rates'] = Checkout_Rates_Shipping_Method::class;
 
 		return $methods;
@@ -175,6 +212,25 @@ class Main {
 	 */
 	public function load_api() {
 		new WC_Shipstation_API();
+	}
+
+	/**
+	 * Save refund meta data.
+	 *
+	 * @since 4.9.5
+	 *
+	 * @param int   $refund_id Refund ID.
+	 * @param array $args Refund arguments.
+	 */
+	public function save_refund_meta_data( $refund_id, $args ) {
+		$refund = wc_get_order( $refund_id );
+
+		if ( ! $refund || ! $refund->get_parent_id() ) {
+			return;
+		}
+
+		$refund->update_meta_data( '_wc_shipstation_refund_args', $args );
+		$refund->save_meta_data();
 	}
 
 	/**

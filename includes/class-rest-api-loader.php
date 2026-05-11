@@ -40,6 +40,7 @@ class REST_API_Loader {
 		// Register the REST API routes.
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 		add_filter( 'woocommerce_rest_api_get_rest_namespaces', array( $this, 'register_shipstation_namespaces' ) );
+		add_filter( 'woocommerce_rest_is_request_to_rest_api', array( $this, 'allow_plain_permalink_auth' ) );
 	}
 
 	/**
@@ -54,6 +55,31 @@ class REST_API_Loader {
 
 		$diagnostics_controller = new Diagnostics_Controller();
 		$diagnostics_controller->register_routes();
+	}
+
+	/**
+	 * Enable WC consumer key/secret auth on our namespace when using plain permalinks.
+	 *
+	 * WC's default check only matches request URIs containing `/wp-json/`, so it misses
+	 * requests using the `?rest_route=/wc-shipstation/...` fallback. This filter extends
+	 * the check to cover our namespace, allowing WC consumer key/secret auth to work
+	 * regardless of permalink structure.
+	 *
+	 * @param bool $is_request_to_rest_api Whether the current request targets the WC REST API.
+	 * @return bool
+	 */
+	public function allow_plain_permalink_auth( $is_request_to_rest_api ) {
+		if ( $is_request_to_rest_api ) {
+			return $is_request_to_rest_api;
+		}
+
+		if ( empty( $_GET['rest_route'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return $is_request_to_rest_api;
+		}
+
+		$rest_route = sanitize_text_field( wp_unslash( $_GET['rest_route'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+
+		return 0 === strpos( $rest_route, '/wc-shipstation/' );
 	}
 
 	/**

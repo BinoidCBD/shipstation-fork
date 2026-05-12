@@ -36,15 +36,22 @@ The three fixes below stack to reduce volume directly.
   transients keyed on `(version, modified_after, page, per_page, status_mapping)`.
   Cache is checked after the existing `woocommerce_shipstation_get_orders_before_process_request`
   action so third-party hooks still fire. ([PR #3](https://github.com/BinoidCBD/shipstation-fork/pull/3))
-- `woocommerce_order_status_changed` and `woocommerce_new_order` now bump the
-  orders-cache version, making order changes immediately visible to the next
-  ShipStation pull without waiting for the 90s TTL. ([PR #4](https://github.com/BinoidCBD/shipstation-fork/pull/4))
+- `woocommerce_new_order`, `woocommerce_order_status_changed`,
+  `woocommerce_refund_created`, and `woocommerce_refund_deleted` now bump the
+  orders-cache version, making these specific mutations immediately visible to
+  the next ShipStation pull. Refund hooks are included because partial refunds
+  do not fire `status_changed` but do change the `returns` payload — issue
+  #810's primary traffic concern. Other order saves (notes, address tweaks,
+  arbitrary meta) intentionally fall through the 90s TTL rather than
+  invalidating on every save; invalidating on every save would collapse cache
+  hit rate during ShipStation's ~38-minute sync bursts. ([PR #4](https://github.com/BinoidCBD/shipstation-fork/pull/4))
 
 ### Notes
 - Expected combined effect on binoidcbd.com: per-cycle DB load drops sharply
   from the clamp; repeated paginated queries within a cycle drop to ~0 DB
-  cost from the cache; staleness is bounded by the 90s TTL but is also
-  invalidated immediately on any order status change.
+  cost from the cache; new orders, status changes, and refund mutations
+  invalidate the cache immediately, while other order saves are bounded by
+  the 90s TTL.
 - All three filters are independently disable-able; the fork is reversible
   by setting each filter to its no-op value.
 - See the parent issue [#810](https://github.com/BinoidCBD/universal-child-theme-oct-2024/issues/810)

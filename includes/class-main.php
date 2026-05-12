@@ -63,11 +63,16 @@ class Main {
 		add_action( 'before_woocommerce_init', array( $this, 'declare_hpos_compatibility' ) );
 		add_action( 'woocommerce_refund_created', array( $this, 'save_refund_meta_data' ), 10, 2 );
 
-		// Invalidate the orders-endpoint response cache (see Orders_Controller) whenever
-		// an order is created or its status changes, so ShipStation's next pull sees the
-		// change without waiting for the 90s TTL.
+		// Invalidate the orders-endpoint response cache (see Orders_Controller) on the
+		// events ShipStation most needs to see promptly: new orders, status transitions,
+		// and refund create/delete (partial refunds don't fire status_changed but do
+		// change the `returns` payload). Other order saves (notes, address tweaks,
+		// arbitrary meta) intentionally fall through the 90s TTL — invalidating on
+		// every save would collapse cache hit rate during ShipStation's 38-min bursts.
 		add_action( 'woocommerce_new_order', array( Orders_Controller::class, 'bump_orders_cache_version' ) );
 		add_action( 'woocommerce_order_status_changed', array( Orders_Controller::class, 'bump_orders_cache_version' ) );
+		add_action( 'woocommerce_refund_created', array( Orders_Controller::class, 'bump_orders_cache_version' ) );
+		add_action( 'woocommerce_refund_deleted', array( Orders_Controller::class, 'bump_orders_cache_version' ) );
 	}
 
 	/**

@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Automattic\WooCommerce\Utilities\FeaturesUtil;
+use WooCommerce\Shipping\ShipStation\API\REST\Orders_Controller;
 use WooCommerce\Shipping\ShipStation\Checkout\Checkout_Rates_Shipping_Method;
 use WooCommerce\Shipping\ShipStation\REST_API_Loader;
 use WC_ShipStation_Privacy;
@@ -61,6 +62,12 @@ class Main {
 		add_filter( 'plugin_action_links_' . plugin_basename( WC_SHIPSTATION_FILE ), array( $this, 'api_plugin_action_links' ) );
 		add_action( 'before_woocommerce_init', array( $this, 'declare_hpos_compatibility' ) );
 		add_action( 'woocommerce_refund_created', array( $this, 'save_refund_meta_data' ), 10, 2 );
+
+		// Invalidate the orders-endpoint response cache (see Orders_Controller) whenever
+		// an order is created or its status changes, so ShipStation's next pull sees the
+		// change without waiting for the 90s TTL.
+		add_action( 'woocommerce_new_order', array( Orders_Controller::class, 'bump_orders_cache_version' ) );
+		add_action( 'woocommerce_order_status_changed', array( Orders_Controller::class, 'bump_orders_cache_version' ) );
 	}
 
 	/**

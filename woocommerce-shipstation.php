@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: ShipStation for WooCommerce
+ * Plugin Name: ShipStation for WooCommerce - Forked & Customized
  * Plugin URI: https://woocommerce.com/products/shipstation-integration/
  * Version: 5.0.4
  * Description: Power your entire shipping operation from one platform.

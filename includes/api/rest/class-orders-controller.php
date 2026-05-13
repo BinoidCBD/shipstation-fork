@@ -515,6 +515,7 @@ class Orders_Controller extends API_Controller {
 		}
 
 		$relevant = array(
+			'version'        => self::get_orders_cache_version(),
 			'modified_after' => isset( $request_params['modified_after'] ) ? (string) $request_params['modified_after'] : '',
 			'page'           => isset( $request_params['page'] ) ? absint( $request_params['page'] ) : 1,
 			'per_page'       => isset( $request_params['per_page'] ) ? intval( $request_params['per_page'] ) : 100,
@@ -522,6 +523,50 @@ class Orders_Controller extends API_Controller {
 		);
 
 		return 'wcss_orders_resp_' . md5( (string) wp_json_encode( $relevant ) );
+	}
+
+	/**
+	 * Current orders-cache version. Included in every cache key so a bump
+	 * effectively invalidates the whole cache namespace in O(1).
+	 *
+	 * @since 5.0.4
+	 *
+	 * @return int
+	 */
+	private static function get_orders_cache_version(): int {
+		return (int) get_option( 'wcss_orders_cache_version', 1 );
+	}
+
+	/**
+	 * Invalidate every cached orders response by bumping the cache version.
+	 *
+	 * Fired from `woocommerce_order_status_changed` and `woocommerce_new_order`
+	 * so order changes are visible to the next ShipStation pull without
+	 * waiting for the 90s TTL to expire. The bump is O(1) — it does not
+	 * touch the transient store, just shifts the keyspace.
+	 *
+	 * Disable via the `woocommerce_shipstation_invalidate_orders_cache` filter.
+	 *
+	 * @since 5.0.4
+	 *
+	 * @return void
+	 */
+	public static function bump_orders_cache_version(): void {
+		/**
+		 * Filter whether to invalidate the orders response cache on order changes.
+		 *
+		 * @since 5.0.4
+		 *
+		 * @param bool $should_invalidate Default true.
+		 */
+		if ( ! (bool) apply_filters( 'woocommerce_shipstation_invalidate_orders_cache', true ) ) {
+			return;
+		}
+
+		$current = self::get_orders_cache_version();
+		// Wrap at 2^31 to stay int-safe across PHP/MySQL boundaries.
+		$next = ( $current >= 2147483647 ) ? 1 : $current + 1;
+		update_option( 'wcss_orders_cache_version', $next, false );
 	}
 
 	/**

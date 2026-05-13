@@ -337,6 +337,15 @@ class Orders_Controller extends API_Controller {
 		*/
 		do_action( 'woocommerce_shipstation_get_orders_before_process_request', $request_params );
 
+		$cache_ttl = $this->get_orders_cache_ttl();
+		$cache_key = $cache_ttl > 0 ? $this->build_orders_cache_key( $request_params ) : '';
+		if ( $cache_ttl > 0 ) {
+			$cached = get_transient( $cache_key );
+			if ( is_array( $cached ) ) {
+				return new WP_REST_Response( $cached, 200 );
+			}
+		}
+
 		// Ensure third-party export filters (e.g. Product Bundles) are loaded.
 		$this->fire_legacy_api_action();
 
@@ -458,6 +467,9 @@ class Orders_Controller extends API_Controller {
 
 		if ( empty( $results->orders ) || empty( $total_orders ) ) {
 			// No sales orders found, return an empty response.
+			if ( $cache_ttl > 0 ) {
+				set_transient( $cache_key, $sales_orders_data, $cache_ttl );
+			}
 			return new WP_REST_Response( $sales_orders_data, 200 );
 		}
 
@@ -506,7 +518,55 @@ class Orders_Controller extends API_Controller {
 
 		Order_Util::mark_orders_exported_bulk( $orders_to_mark );
 
+		if ( $cache_ttl > 0 ) {
+			set_transient( $cache_key, $sales_orders_data, $cache_ttl );
+		}
+
 		return new WP_REST_Response( $sales_orders_data, 200 );
+	}
+
+	/**
+	 * Build a stable cache key for the orders response.
+	 *
+	 * Keyed only on the request params that actually shape the response payload
+	 * (modified_after, pagination, status mapping). Other params are intentionally
+	 * excluded so cosmetic differences in the request don't fragment the cache.
+	 *
+	 * @since 5.0.4
+	 *
+	 * @param array $request_params Raw REST request params.
+	 * @return string Transient key, prefixed with `wcss_orders_resp_`.
+	 */
+	private function build_orders_cache_key( array $request_params ): string {
+		$status_mapping = $request_params['status_mapping'] ?? '';
+		if ( is_array( $status_mapping ) ) {
+			$status_mapping = array_map( 'strval', $status_mapping );
+			sort( $status_mapping );
+		}
+
+		$relevant = array(
+			'modified_after' => isset( $request_params['modified_after'] ) ? (string) $request_params['modified_after'] : '',
+			'page'           => isset( $request_params['page'] ) ? absint( $request_params['page'] ) : 1,
+			'per_page'       => isset( $request_params['per_page'] ) ? intval( $request_params['per_page'] ) : 100,
+			'status_mapping' => $status_mapping,
+		);
+
+		return 'wcss_orders_resp_' . md5( (string) wp_json_encode( $relevant ) );
+	}
+
+	/**
+	 * TTL (seconds) for the orders response cache.
+	 *
+	 * ShipStation re-polls the same wide-window queries repeatedly within each
+	 * ~100-minute sync cycle; a short TTL absorbs the repeats without
+	 * meaningfully delaying visibility of new orders (max staleness == TTL).
+	 *
+	 * @since 5.0.4
+	 *
+	 * @return int Default 90. Filter `woocommerce_shipstation_orders_response_cache_ttl`. Return 0 to disable.
+	 */
+	private function get_orders_cache_ttl(): int {
+		return (int) apply_filters( 'woocommerce_shipstation_orders_response_cache_ttl', 90 );
 	}
 
 	/**

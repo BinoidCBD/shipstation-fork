@@ -103,6 +103,82 @@ class Diagnostics_Controller extends API_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function get_details( WP_REST_Request $request ): WP_REST_Response {
+		$cache_ttl = $this->get_diagnostics_cache_ttl();
+		$site_info = $cache_ttl > 0
+			? $this->get_cached_site_info( $cache_ttl )
+			: $this->build_site_info();
+
+		/**
+		 * Filters the site information.
+		 *
+		 * @param array           $site_info The site information.
+		 * @param WP_REST_Request $request   The request object.
+		 *
+		 * @since 4.8.0
+		 */
+		return new WP_REST_Response( apply_filters( 'woocommerce_shipstation_diagnostics_controller_get_details', $site_info, $request ), 200 );
+	}
+
+	/**
+	 * Read the cached site_info, with stale-while-revalidate and a
+	 * `wp_cache_add()` single-flight lock to prevent a thundering herd
+	 * during ShipStation catch-up bursts on /wc/v3/system_status.
+	 *
+	 * On hosts with a persistent object cache (e.g. WP Engine + Memcached)
+	 * the lock is atomic across PHP workers. Without one, it degrades to
+	 * per-request scope and the pattern falls back to "one stampede per
+	 * TTL boundary" — still strictly better than no cache.
+	 *
+	 * @param int $fresh_ttl TTL for the fresh transient, in seconds.
+	 *
+	 * @return array
+	 */
+	private function get_cached_site_info( int $fresh_ttl ): array {
+		$fresh_key = 'wcss_diagnostics_details_fresh_v1';
+		$stale_key = 'wcss_diagnostics_details_stale_v1';
+		$lock_key  = 'wcss_diagnostics_lock_v1';
+
+		$fresh = get_transient( $fresh_key );
+		if ( is_array( $fresh ) ) {
+			return $fresh;
+		}
+
+		$stale    = get_transient( $stale_key );
+		$won_lock = wp_cache_add( $lock_key, 1, '', 30 );
+
+		if ( ! $won_lock && is_array( $stale ) ) {
+			return $stale;
+		}
+
+		$site_info = $this->build_site_info();
+
+		/**
+		 * Filters the stale-fallback TTL (seconds) for the diagnostics
+		 * response cache. Late readers see this copy while a single
+		 * worker refreshes the fresh transient.
+		 *
+		 * @since 5.0.4-forked
+		 *
+		 * @param int $stale_ttl Default HOUR_IN_SECONDS.
+		 */
+		$stale_ttl = (int) apply_filters( 'woocommerce_shipstation_diagnostics_stale_ttl', HOUR_IN_SECONDS );
+
+		set_transient( $fresh_key, $site_info, $fresh_ttl );
+		set_transient( $stale_key, $site_info, $stale_ttl );
+		wp_cache_delete( $lock_key );
+
+		return $site_info;
+	}
+
+	/**
+	 * Build the base site_info payload from /wc/v3/system_status.
+	 *
+	 * Extracted so the cache path and the cache-disabled path share
+	 * one implementation.
+	 *
+	 * @return array
+	 */
+	private function build_site_info(): array {
 		$report      = wc_get_container()->get( RestApiUtil::class )->get_endpoint_data( '/wc/v3/system_status' );
 		$environment = isset( $report['environment'] ) && is_array( $report['environment'] ) ? $report['environment'] : array();
 
@@ -128,8 +204,7 @@ class Diagnostics_Controller extends API_Controller {
 			$active_plugins = array();
 		}
 
-		// Prepare the response data.
-		$site_info = array(
+		return array(
 			'source_details' => array(
 				'plugin_version'      => WC_SHIPSTATION_VERSION,
 				'woocommerce_version' => isset( $environment['version'] ) ? esc_html( $environment['version'] ) : '',
@@ -139,16 +214,20 @@ class Diagnostics_Controller extends API_Controller {
 				'active_plugins'      => implode( ', ', $active_plugins ),
 			),
 		);
+	}
 
-		/**
-		 * Filters the site information.
-		 *
-		 * @param array           $site_info The site information.
-		 * @param WP_REST_Request $request   The request object.
-		 *
-		 * @since 4.8.0
-		 */
-		return new WP_REST_Response( apply_filters( 'woocommerce_shipstation_diagnostics_controller_get_details', $site_info, $request ), 200 );
+	/**
+	 * TTL (seconds) for the fresh diagnostics/details response cache.
+	 *
+	 * Filter `woocommerce_shipstation_diagnostics_cache_ttl`. Return 0
+	 * to disable caching entirely.
+	 *
+	 * @since 5.0.4-forked
+	 *
+	 * @return int
+	 */
+	private function get_diagnostics_cache_ttl(): int {
+		return (int) apply_filters( 'woocommerce_shipstation_diagnostics_cache_ttl', 5 * MINUTE_IN_SECONDS );
 	}
 
 	/**

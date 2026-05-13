@@ -143,8 +143,15 @@ class Diagnostics_Controller extends API_Controller {
 			return $fresh;
 		}
 
-		$stale    = get_transient( $stale_key );
-		$won_lock = wp_cache_add( $lock_key, 1, '', 30 );
+		$stale = get_transient( $stale_key );
+
+		// Store a unique token as the lock value so we only release the
+		// lock if we still own it. If build_site_info() outlives the 30s
+		// lock TTL, another worker can acquire a new lock under the same
+		// key; without this check we would delete that newer lock and
+		// reopen the stampede window.
+		$token    = wp_generate_uuid4();
+		$won_lock = wp_cache_add( $lock_key, $token, '', 30 );
 
 		if ( ! $won_lock && is_array( $stale ) ) {
 			return $stale;
@@ -165,7 +172,10 @@ class Diagnostics_Controller extends API_Controller {
 
 		set_transient( $fresh_key, $site_info, $fresh_ttl );
 		set_transient( $stale_key, $site_info, $stale_ttl );
-		wp_cache_delete( $lock_key );
+
+		if ( $won_lock && wp_cache_get( $lock_key ) === $token ) {
+			wp_cache_delete( $lock_key );
+		}
 
 		return $site_info;
 	}

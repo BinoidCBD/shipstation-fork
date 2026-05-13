@@ -399,6 +399,36 @@ class Orders_Controller extends API_Controller {
 		);
 
 		if ( ! empty( $modified_after ) ) {
+			/**
+			 * Filter the maximum lookback window applied to ShipStation's `modified_after` parameter.
+			 *
+			 * ShipStation's pull sync uses a 14-day fixed `modified_after` value on pages 2+,
+			 * causing every cycle to re-scan the full 14-day order window. This filter caps
+			 * how far back the query is allowed to look. Return 0 to disable clamping and
+			 * honor whatever ShipStation sends.
+			 *
+			 * @since 5.0.4
+			 *
+			 * @param int $max_age_seconds Maximum allowed age of `modified_after`, in seconds. Default 48 hours.
+			 */
+			$max_age = (int) apply_filters( 'woocommerce_shipstation_modified_after_floor', 48 * HOUR_IN_SECONDS );
+
+			if ( $max_age > 0 ) {
+				$floor = time() - $max_age;
+				if ( $modified_after < $floor ) {
+					$this->log(
+						sprintf(
+							/* translators: 1: requested ISO timestamp, 2: clamped ISO timestamp, 3: max age in hours */
+							__( 'Clamping modified_after from %1$s to %2$s (max age %3$d hours).', 'woocommerce-shipstation-integration' ),
+							gmdate( 'Y-m-d\TH:i:s\Z', $modified_after ),
+							gmdate( 'Y-m-d\TH:i:s\Z', $floor ),
+							(int) ( $max_age / HOUR_IN_SECONDS )
+						)
+					);
+					$modified_after = $floor;
+				}
+			}
+
 			$args['date_modified'] = '>=' . $modified_after;
 		}
 

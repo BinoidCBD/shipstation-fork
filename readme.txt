@@ -7,7 +7,7 @@ WC tested up to: 10.7
 WC requires at least: 10.5
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 5.0.4
+Stable tag: 5.0.4-forked-customized
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 

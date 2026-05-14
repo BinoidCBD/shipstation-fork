@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ShipStation for WooCommerce - Forked & Customized
  * Plugin URI: https://woocommerce.com/products/shipstation-integration/
- * Version: 5.0.4
+ * Version: 5.0.4-forked-customized
  * Description: Power your entire shipping operation from one platform.
  * Author: WooCommerce
  * Author URI: https://woocommerce.com/
@@ -39,7 +39,7 @@ if ( ! defined( 'WC_SHIPSTATION_PLUGIN_URL' ) ) {
 	define( 'WC_SHIPSTATION_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 }
 
-define( 'WC_SHIPSTATION_VERSION', '5.0.4' ); // WRCS: DEFINED_VERSION.
+define( 'WC_SHIPSTATION_VERSION', '5.0.4-forked-customized' ); // WRCS: DEFINED_VERSION.
 
 // Composer + Jetpack autoloader. Ships with the production zip; may be absent in
 // dev checkouts where `composer install` has not been run.

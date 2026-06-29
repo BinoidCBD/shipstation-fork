@@ -89,4 +89,33 @@ final class Features {
 		 */
 		return (bool) apply_filters( 'wc_shipstation_wpcom_transport_enabled', false );
 	}
+
+	/**
+	 * Whether incoming ShipStation shipment webhooks are queued for batched
+	 * background processing instead of being handled synchronously in the request
+	 * (GH-9). Default OFF — enable per the staged rollout once the queue table and
+	 * worker are verified in staging.
+	 *
+	 * Enabled via the WC_SHIPSTATION_SHIPMENT_QUEUE constant (hard override, e.g.
+	 * in wp-config) or the wc_shipstation_shipment_queue_enabled filter. The
+	 * constant is the instant kill-switch: define it false to fall back to
+	 * synchronous processing with no redeploy.
+	 *
+	 * @since 5.2.0-forked
+	 *
+	 * @return bool
+	 */
+	public static function is_shipment_queue_enabled(): bool {
+		if ( defined( 'WC_SHIPSTATION_SHIPMENT_QUEUE' ) ) {
+			return (bool) WC_SHIPSTATION_SHIPMENT_QUEUE;
+		}
+
+		/**
+		 * Filters whether incoming shipment webhooks are batched via the queue.
+		 *
+		 * @since 5.2.0-forked
+		 * @param bool $enabled Whether the queue is enabled. Default false.
+		 */
+		return (bool) apply_filters( 'wc_shipstation_shipment_queue_enabled', false );
+	}
 }

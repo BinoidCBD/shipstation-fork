@@ -32,6 +32,8 @@ use Automattic\WooCommerce\Utilities\NumberUtil;
 use Automattic\WooCommerce\Enums\OrderStatus;
 use WP_Error;
 use WooCommerce\Shipping\ShipStation\Logger;
+use WooCommerce\Shipping\ShipStation\Features;
+use WooCommerce\Shipping\ShipStation\Shipment_Queue;
 
 /**
  * Orders_Controller class.
@@ -1754,176 +1756,23 @@ class Orders_Controller extends API_Controller {
 			return new WP_REST_Response( 'Invalid request format.', 400 );
 		}
 
+		// Queue mode (GH-9): persist each notification and acknowledge immediately
+		// so a ShipStation catch-up burst cannot serialize DB write locks. The
+		// background worker replays each notification through
+		// process_single_notification(), so the order side effects are identical —
+		// only deferred. Disabled by default; see Features::is_shipment_queue_enabled().
+		if ( Features::is_shipment_queue_enabled() ) {
+			return $this->enqueue_orders_shipments( $notifications );
+		}
+
 		$response = array();
 
 		foreach ( $notifications as $notification ) {
-			$saved_notification = array(
-				'notification_id'  => '',
-				'tracking_number'  => '',
-				'tracking_url'     => '',
-				'carrier_code'     => '',
-				'ext_locatin_id'   => '',
-				'items'            => array(),
-				'ship_to'          => array(),
-				'ship_from'        => array(),
-				'return_address'   => array(),
-				'ship_date'        => '',
-				'currency'         => '',
-				'fulfillment_cost' => 0.0,
-				'insurance_cost'   => 0.0,
-				'notify_buyer'     => false,
-				'notes'            => array(),
-			);
+			$result = $this->process_single_notification( $notification );
 
-			if ( empty( $notification['notification_id'] ) ) {
-				$this->log( __( 'Notification ID is empty for this notification: ', 'woocommerce-shipstation-integration' ) . print_r( $notification, true ) );// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_print_r --- Its needed for logging
-				continue; // Skip if notification ID is not set.
+			if ( null !== $result ) {
+				$response[] = $result;
 			}
-
-			if ( empty( $notification['order_id'] ) ) {
-				$response[] = array(
-					'notification_id' => $notification['notification_id'],
-					'status'          => 'failure',
-					'failure_reason'  => __( 'Empty order ID', 'woocommerce-shipstation-integration' ),
-				);
-
-				// translators: %1$s is the notification id.
-				$this->log( sprintf( __( 'Notification ID: %1$s doesnt have order ID.', 'woocommerce-shipstation-integration' ), $notification['notification_id'] ) );
-
-				continue; // Skip notification without order ID.
-			}
-
-			if ( ! is_numeric( $notification['order_id'] ) ) {
-				$response[] = array(
-					'notification_id' => $notification['notification_id'],
-					'status'          => 'failure',
-					'failure_reason'  => __( 'Order ID is not numeric', 'woocommerce-shipstation-integration' ),
-				);
-
-				// translators: %1$s is the order id, %2$d is the notification id.
-				$this->log( sprintf( __( 'Order ID: %1$d from notification ID: %2$s is not numeric.', 'woocommerce-shipstation-integration' ), $notification['order_id'], $notification['notification_id'] ) );
-
-				continue; // Skip if product_id is not numeric.
-			}
-
-			$order_id     = absint( $notification['order_id'] );
-			$order_number = '';
-			$order        = wc_get_order( $order_id );
-
-			// Fallback: try order number if order ID lookup failed.
-			if ( ! $order instanceof WC_Order ) {
-				$order_number = isset( $notification['order_number'] ) ? (string) $notification['order_number'] : '';
-				$order        = wc_get_order( Order_Util::get_order_id_from_order_number( $order_number ) );
-			}
-
-			// Skip if order still not found.
-			if ( ! $order instanceof WC_Order ) {
-				$response[] = array(
-					'notification_id' => $notification['notification_id'],
-					'status'          => 'failure',
-					'failure_reason'  => __( 'Order not found', 'woocommerce-shipstation-integration' ),
-				);
-
-				$this->log(
-					sprintf(
-					// translators: %1$d is the order ID, %2$s is the order number.
-						__( 'Order ID: %1$d or Order number: %2$s cannot be found.', 'woocommerce-shipstation-integration' ),
-						$order_id,
-						$order_number
-					)
-				);
-
-				continue;
-			}
-
-			$saved_notification = wp_parse_args( $notification, $saved_notification );
-
-			$saved_items = array();
-
-			// Normalize items: ShipStation may omit this field or send an empty list
-			// when items were replaced before shipping. Fall back to an empty array
-			// so process_items() writes the generic tracking note — matching the XML
-			// shipnotify handler's behavior for an empty <Items> element, which also
-			// writes the note without transitioning the order (the XML handler's
-			// "ship entire order" branch only fires on transport-level failures:
-			// empty POST body or missing SimpleXML extension, neither of which has
-			// a JSON analog since malformed REST bodies are rejected upstream).
-			$items_payload = isset( $notification['items'] ) && is_array( $notification['items'] )
-				? $notification['items']
-				: array();
-
-			foreach ( $items_payload as $item ) {
-				if ( empty( $item['description'] ) && empty( $item['quantity'] ) ) {
-					$this->log( __( 'Skipped this item because doesnt have description and quantity: ', 'woocommerce-shipstation-integration' ) . print_r( $item, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_print_r --- Its needed for logging
-					continue; // Skip if required fields are not set.
-				}
-
-				$saved_item = array(
-					'description'  => '',
-					'quantity'     => '',
-					'line_item_id' => '',
-					'sku'          => '',
-					'product_id'   => '',
-				);
-
-				$saved_item             = wp_parse_args( $item, $saved_item );
-				$saved_item['quantity'] = absint( $saved_item['quantity'] );
-				$order_item             = $order->get_item( $saved_item['line_item_id'] );
-
-				if ( $order_item instanceof WC_Order_Item_Product ) {
-					$saved_item['description'] = $order_item->get_name();
-					$saved_item['product_id']  = $order_item->get_product_id();
-					$order_item_product        = $order_item->get_product();
-					$saved_item['sku']         = $order_item_product instanceof WC_Product
-						? $order_item_product->get_sku()
-						: '';
-				}
-
-				$saved_items[] = $saved_item;
-
-				$this->log( __( 'ShipNotify Item: ', 'woocommerce-shipstation-integration' ) . print_r( $saved_item, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_print_r --- Its needed for logging
-			}
-
-			if ( ! empty( $notification['ship_to'] ) ) {
-				$saved_notification['ship_to'] = $this->parse_address_info( $notification['ship_to'] );
-			}
-
-			if ( ! empty( $notification['ship_from'] ) ) {
-				$saved_notification['ship_from'] = $this->parse_address_info( $notification['ship_from'] );
-			}
-
-			if ( ! empty( $notification['return_address'] ) ) {
-				$saved_notification['return_address'] = $this->parse_address_info( $notification['return_address'] );
-			}
-
-			if ( ! empty( $notification['ship_date'] ) && strtotime( $notification['ship_date'] ) ) {
-				$saved_notification['ship_date'] = gmdate( 'Y-m-d H:i:s', strtotime( $notification['ship_date'] ) );
-			}
-
-			if ( ! empty( $notification['fulfillment_cost'] ) ) {
-				$saved_notification['fulfillment_cost'] = floatval( $notification['fulfillment_cost'] );
-			}
-
-			if ( ! empty( $notification['insurance_cost'] ) ) {
-				$saved_notification['insurance_cost'] = floatval( $notification['insurance_cost'] );
-			}
-
-			if ( ! empty( $notification['notify_buyer'] ) ) {
-				$saved_notification['notify_buyer'] = filter_var( $notification['notify_buyer'], FILTER_VALIDATE_BOOLEAN );
-			}
-
-			if ( ! empty( $notification['notes'] ) ) {
-				$saved_notification['notes'] = $this->parse_notes( $notification['notes'] );
-			}
-
-			$saved_notification['items'] = $saved_items;
-			$this->process_items( $saved_items, $order, $saved_notification );
-
-			$response[] = array(
-				'notification_id' => $notification['notification_id'],
-				'status'          => 'success',
-				'order_id'        => $order->get_id(),
-			);
 		}
 
 		return new WP_REST_Response(
@@ -1931,6 +1780,256 @@ class Orders_Controller extends API_Controller {
 				'notification_results' => $response,
 			),
 			200
+		);
+	}
+
+	/**
+	 * Queue each notification for background processing and return the
+	 * acknowledgement body ShipStation expects, doing no per-order DB work in the
+	 * request (GH-9).
+	 *
+	 * Trade-off: ShipStation is told `success` on accept — it has its 200 and will
+	 * not retry — so processing reliability moves in-house. The worker retries
+	 * failures with backoff and logs permanent ones (see Shipment_Queue). That is
+	 * the point: it decouples the burst from the work.
+	 *
+	 * @since 5.2.0-forked
+	 *
+	 * @param array $notifications Raw notifications from the request body.
+	 *
+	 * @return WP_REST_Response
+	 */
+	private function enqueue_orders_shipments( array $notifications ): WP_REST_Response {
+		$response = array();
+
+		foreach ( $notifications as $notification ) {
+			$notification_id = isset( $notification['notification_id'] ) ? (string) $notification['notification_id'] : '';
+
+			// Mirror the synchronous path: a notification with no id is skipped and
+			// logged, contributing no result row.
+			if ( '' === $notification_id ) {
+				$this->log( __( 'Notification ID is empty for this notification: ', 'woocommerce-shipstation-integration' ) . print_r( $notification, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_print_r --- Its needed for logging
+				continue;
+			}
+
+			$order_ref = '';
+			if ( isset( $notification['order_id'] ) ) {
+				$order_ref = (string) $notification['order_id'];
+			} elseif ( isset( $notification['order_number'] ) ) {
+				$order_ref = (string) $notification['order_number'];
+			}
+
+			$queued = Shipment_Queue::enqueue( $notification_id, $order_ref, (string) wp_json_encode( $notification ) );
+
+			// Only acknowledge success once the notification is durably stored.
+			// ShipStation stops retrying after our 200, so a failed enqueue (e.g. a
+			// transient DB error or a missing table) must not report success — fall
+			// back to synchronous processing so the shipment is never lost, and
+			// report that real result instead.
+			if ( $queued ) {
+				$response[] = array(
+					'notification_id' => $notification_id,
+					'status'          => 'success',
+					'order_id'        => $order_ref,
+				);
+				continue;
+			}
+
+			Logger::error( 'ShipStation shipment-queue enqueue failed for notification ' . $notification_id . '; processing synchronously as a fallback.' );
+
+			$result = $this->process_single_notification( $notification );
+			if ( null !== $result ) {
+				$response[] = $result;
+			}
+		}
+
+		Shipment_Queue::kick();
+
+		return new WP_REST_Response(
+			array(
+				'notification_results' => $response,
+			),
+			200
+		);
+	}
+
+	/**
+	 * Process a single ShipStation shipment notification: validate, resolve the
+	 * order, normalize items/addresses/notes, and apply it via process_items().
+	 *
+	 * Extracted from update_orders_shipments() so the synchronous REST path and
+	 * the background queue worker (Shipment_Queue::run_batch()) share one
+	 * implementation and therefore produce identical order state.
+	 *
+	 * @since 5.2.0-forked
+	 *
+	 * @param array $notification One raw notification.
+	 *
+	 * @return array|null The per-notification result row, or null when the
+	 *                    notification has no id (skipped with a log line and no
+	 *                    result row — matching the original loop's behavior).
+	 */
+	public function process_single_notification( array $notification ): ?array {
+		$saved_notification = array(
+			'notification_id'  => '',
+			'tracking_number'  => '',
+			'tracking_url'     => '',
+			'carrier_code'     => '',
+			'ext_locatin_id'   => '',
+			'items'            => array(),
+			'ship_to'          => array(),
+			'ship_from'        => array(),
+			'return_address'   => array(),
+			'ship_date'        => '',
+			'currency'         => '',
+			'fulfillment_cost' => 0.0,
+			'insurance_cost'   => 0.0,
+			'notify_buyer'     => false,
+			'notes'            => array(),
+		);
+
+		if ( empty( $notification['notification_id'] ) ) {
+			$this->log( __( 'Notification ID is empty for this notification: ', 'woocommerce-shipstation-integration' ) . print_r( $notification, true ) );// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_print_r --- Its needed for logging
+			return null; // Skip if notification ID is not set.
+		}
+
+		if ( empty( $notification['order_id'] ) ) {
+			// translators: %1$s is the notification id.
+			$this->log( sprintf( __( 'Notification ID: %1$s doesnt have order ID.', 'woocommerce-shipstation-integration' ), $notification['notification_id'] ) );
+
+			return array(
+				'notification_id' => $notification['notification_id'],
+				'status'          => 'failure',
+				'failure_reason'  => __( 'Empty order ID', 'woocommerce-shipstation-integration' ),
+			);
+		}
+
+		if ( ! is_numeric( $notification['order_id'] ) ) {
+			// translators: %1$s is the order id, %2$d is the notification id.
+			$this->log( sprintf( __( 'Order ID: %1$d from notification ID: %2$s is not numeric.', 'woocommerce-shipstation-integration' ), $notification['order_id'], $notification['notification_id'] ) );
+
+			return array(
+				'notification_id' => $notification['notification_id'],
+				'status'          => 'failure',
+				'failure_reason'  => __( 'Order ID is not numeric', 'woocommerce-shipstation-integration' ),
+			);
+		}
+
+		$order_id     = absint( $notification['order_id'] );
+		$order_number = '';
+		$order        = wc_get_order( $order_id );
+
+		// Fallback: try order number if order ID lookup failed.
+		if ( ! $order instanceof WC_Order ) {
+			$order_number = isset( $notification['order_number'] ) ? (string) $notification['order_number'] : '';
+			$order        = wc_get_order( Order_Util::get_order_id_from_order_number( $order_number ) );
+		}
+
+		// Skip if order still not found.
+		if ( ! $order instanceof WC_Order ) {
+			$this->log(
+				sprintf(
+				// translators: %1$d is the order ID, %2$s is the order number.
+					__( 'Order ID: %1$d or Order number: %2$s cannot be found.', 'woocommerce-shipstation-integration' ),
+					$order_id,
+					$order_number
+				)
+			);
+
+			return array(
+				'notification_id' => $notification['notification_id'],
+				'status'          => 'failure',
+				'failure_reason'  => __( 'Order not found', 'woocommerce-shipstation-integration' ),
+			);
+		}
+
+		$saved_notification = wp_parse_args( $notification, $saved_notification );
+
+		$saved_items = array();
+
+		// Normalize items: ShipStation may omit this field or send an empty list
+		// when items were replaced before shipping. Fall back to an empty array
+		// so process_items() writes the generic tracking note — matching the XML
+		// shipnotify handler's behavior for an empty <Items> element, which also
+		// writes the note without transitioning the order (the XML handler's
+		// "ship entire order" branch only fires on transport-level failures:
+		// empty POST body or missing SimpleXML extension, neither of which has
+		// a JSON analog since malformed REST bodies are rejected upstream).
+		$items_payload = isset( $notification['items'] ) && is_array( $notification['items'] )
+			? $notification['items']
+			: array();
+
+		foreach ( $items_payload as $item ) {
+			if ( empty( $item['description'] ) && empty( $item['quantity'] ) ) {
+				$this->log( __( 'Skipped this item because doesnt have description and quantity: ', 'woocommerce-shipstation-integration' ) . print_r( $item, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_print_r --- Its needed for logging
+				continue; // Skip if required fields are not set.
+			}
+
+			$saved_item = array(
+				'description'  => '',
+				'quantity'     => '',
+				'line_item_id' => '',
+				'sku'          => '',
+				'product_id'   => '',
+			);
+
+			$saved_item             = wp_parse_args( $item, $saved_item );
+			$saved_item['quantity'] = absint( $saved_item['quantity'] );
+			$order_item             = $order->get_item( $saved_item['line_item_id'] );
+
+			if ( $order_item instanceof WC_Order_Item_Product ) {
+				$saved_item['description'] = $order_item->get_name();
+				$saved_item['product_id']  = $order_item->get_product_id();
+				$order_item_product        = $order_item->get_product();
+				$saved_item['sku']         = $order_item_product instanceof WC_Product
+					? $order_item_product->get_sku()
+					: '';
+			}
+
+			$saved_items[] = $saved_item;
+
+			$this->log( __( 'ShipNotify Item: ', 'woocommerce-shipstation-integration' ) . print_r( $saved_item, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_print_r --- Its needed for logging
+		}
+
+		if ( ! empty( $notification['ship_to'] ) ) {
+			$saved_notification['ship_to'] = $this->parse_address_info( $notification['ship_to'] );
+		}
+
+		if ( ! empty( $notification['ship_from'] ) ) {
+			$saved_notification['ship_from'] = $this->parse_address_info( $notification['ship_from'] );
+		}
+
+		if ( ! empty( $notification['return_address'] ) ) {
+			$saved_notification['return_address'] = $this->parse_address_info( $notification['return_address'] );
+		}
+
+		if ( ! empty( $notification['ship_date'] ) && strtotime( $notification['ship_date'] ) ) {
+			$saved_notification['ship_date'] = gmdate( 'Y-m-d H:i:s', strtotime( $notification['ship_date'] ) );
+		}
+
+		if ( ! empty( $notification['fulfillment_cost'] ) ) {
+			$saved_notification['fulfillment_cost'] = floatval( $notification['fulfillment_cost'] );
+		}
+
+		if ( ! empty( $notification['insurance_cost'] ) ) {
+			$saved_notification['insurance_cost'] = floatval( $notification['insurance_cost'] );
+		}
+
+		if ( ! empty( $notification['notify_buyer'] ) ) {
+			$saved_notification['notify_buyer'] = filter_var( $notification['notify_buyer'], FILTER_VALIDATE_BOOLEAN );
+		}
+
+		if ( ! empty( $notification['notes'] ) ) {
+			$saved_notification['notes'] = $this->parse_notes( $notification['notes'] );
+		}
+
+		$saved_notification['items'] = $saved_items;
+		$this->process_items( $saved_items, $order, $saved_notification );
+
+		return array(
+			'notification_id' => $notification['notification_id'],
+			'status'          => 'success',
+			'order_id'        => $order->get_id(),
 		);
 	}
 
@@ -2217,7 +2316,7 @@ class Orders_Controller extends API_Controller {
 	 *
 	 * @return void
 	 */
-	protected function fire_legacy_api_action(): void {
+	public function fire_legacy_api_action(): void {
 		if ( did_action( 'woocommerce_api_wc_shipstation' ) ) {
 			return;
 		}

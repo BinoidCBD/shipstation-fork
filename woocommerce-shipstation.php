@@ -71,6 +71,11 @@ function woocommerce_shipstation_deactivate() {
 	if ( class_exists( '\WooCommerce\Shipping\ShipStation\Auth_Controller' ) ) {
 		\WooCommerce\Shipping\ShipStation\Auth_Controller::unschedule_orphan_prune();
 	}
+
+	// Cancel the recurring shipment-queue drain worker (GH-9).
+	if ( class_exists( '\WooCommerce\Shipping\ShipStation\Shipment_Queue' ) ) {
+		\WooCommerce\Shipping\ShipStation\Shipment_Queue::unschedule_worker();
+	}
 }
 
 register_deactivation_hook( __FILE__, 'woocommerce_shipstation_deactivate' );
@@ -93,6 +98,11 @@ function woocommerce_shipstation_activate() {
 	require_once WC_SHIPSTATION_ABSPATH . 'includes/class-logger.php';
 	require_once WC_SHIPSTATION_ABSPATH . 'includes/class-connection-log.php';
 	\WooCommerce\Shipping\ShipStation\Connection_Log::install();
+
+	// Fast-track the incoming-shipment queue table on a fresh activation (GH-9);
+	// existing installs get it via Shipment_Queue::maybe_install() on next load.
+	require_once WC_SHIPSTATION_ABSPATH . 'includes/class-shipment-queue.php';
+	\WooCommerce\Shipping\ShipStation\Shipment_Queue::install();
 }
 
 register_activation_hook( __FILE__, 'woocommerce_shipstation_activate' );

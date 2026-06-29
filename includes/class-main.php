@@ -103,6 +103,13 @@ class Main {
 		// schedules the recurring action on `init`.
 		Auth_Controller::register_orphan_prune();
 
+		// Create/upgrade the incoming-shipment queue table (version-gated, no-op
+		// once installed) and wire its Action Scheduler drain worker (GH-9). The
+		// worker self-cancels while the feature flag is off, so this is inert
+		// until the queue is enabled.
+		Shipment_Queue::maybe_install();
+		Shipment_Queue::register_worker();
+
 		add_action( 'before_woocommerce_init', array( $this, 'before_woocommerce_init' ) );
 		add_action( 'woocommerce_init', array( $this, 'load_rest_api' ) );
 
@@ -176,6 +183,7 @@ class Main {
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/class-features.php';
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/class-order-util.php';
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/class-connection-log.php';
+		require_once WC_SHIPSTATION_ABSPATH . 'includes/class-shipment-queue.php';
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/class-wpcom-connection.php';
 		include_once WC_SHIPSTATION_ABSPATH . 'includes/class-wc-shipstation-integration.php';
 		include_once WC_SHIPSTATION_ABSPATH . 'includes/class-auth-controller.php';

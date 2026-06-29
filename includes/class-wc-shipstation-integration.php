@@ -774,6 +774,12 @@ class WC_ShipStation_Integration extends WC_Integration {
 		$site_info['source_details']['status_mapping']      = self::$status_mapping;
 		$site_info['source_details']['status_mapping_mode'] = $this->get_option( 'status_mode', self::STATUS_MODE_API );
 
+		// Surface the incoming-shipment queue backlog so the 5–6 AM burst window
+		// can be monitored during the GH-9 rollout (no-op until the queue exists).
+		if ( class_exists( '\WooCommerce\Shipping\ShipStation\Shipment_Queue' ) ) {
+			$site_info['source_details']['shipment_queue_depth'] = \WooCommerce\Shipping\ShipStation\Shipment_Queue::depth();
+		}
+
 		return $site_info;
 	}
 

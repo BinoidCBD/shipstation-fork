@@ -1,0 +1,166 @@
+{
+  "repo_label": "ShipStation for WooCommerce",
+  "repo_kind": "wordpress-plugin",
+  "repo_slug": "shipstation-fork",
+  "db_filename": "shipstation-fork.sqlite",
+  "db_path": "temp/rag/shipstation-fork.sqlite",
+  "system_instructions_path": "ask_self/ask_self_system_instructions.json",
+  "env_file_path": "temp/ask-self-rag.env",
+  "ingest_command": "./scripts/ask-self-ingest.sh --mode all",
+  "tenancy_env_var": "SHIPSTATION_FORK_ASK_SELF_TEAM_ID",
+  "embedding": {
+    "provider": "qwen-local",
+    "model": "Qwen/Qwen3-Embedding-0.6B",
+    "dim": 1024,
+    "requests_per_minute": 0,
+    "tokens_per_minute": 0
+  },
+  "synthesis": {
+    "provider": "ollama",
+    "model": "qwen3:8b",
+    "endpoint": "http://localhost:11434",
+    "temperature": 0.3,
+    "max_output_tokens": 1500,
+    "timeout_seconds": 180
+  },
+  "shared_index": {
+    "enabled": true,
+    "path": "ask_self/index/shipstation-fork-shared.sqlite",
+    "prefer_for_query": false
+  },
+  "github": {
+    "owner": "BinoidCBD",
+    "repo": "shipstation-fork",
+    "default_fetch_limit": 0,
+    "token_env_vars": [
+      "GITHUB_TOKEN"
+    ]
+  },
+  "docs": {
+    "extensions": [
+      ".md",
+      ".txt"
+    ],
+    "include_patterns": [
+      "^(?:README|CHANGELOG|CONTRIBUTING|LICENSE|AGENTS|ARCHITECTURE)\\.md$",
+      "^readme\\.txt$",
+      "^changelog\\.txt$"
+    ],
+    "exclude_patterns": [
+      "^\\.git/",
+      "^node_modules/",
+      "^vendor/",
+      "^temp/",
+      "^ask_self/index/",
+      "^wordpress_org_assets/",
+      "^ASK_SELF\\.md$",
+      "^ARCHITECTURE-BAK\\.md$",
+      "^ASK_SELF_INTEGRATION\\.md$"
+    ]
+  },
+  "source": {
+    "extensions": [
+      ".php",
+      ".js",
+      ".css",
+      ".json"
+    ],
+    "include_patterns": [
+      "^woocommerce-shipstation\\.php$",
+      "^includes/.+\\.php$",
+      "^templates/.+\\.php$",
+      "^assets/js/(?!.*\\.min\\.js$).+\\.js$",
+      "^assets/css/.+\\.css$"
+    ],
+    "exclude_patterns": [
+      "^\\.git/",
+      "^node_modules/",
+      "^vendor/",
+      "^temp/",
+      "^ask_self/index/",
+      "^wordpress_org_assets/",
+      "^languages/",
+      "^assets/images/",
+      "\\.min\\.(?:js|css)$"
+    ]
+  },
+  "classification_rules": [
+    {
+      "pattern": "^changelog\\.txt$",
+      "source": "changelog",
+      "priority": 5,
+      "chunker": "changelog"
+    },
+    {
+      "pattern": "^readme\\.txt$",
+      "source": "plugin-readme",
+      "priority": 5,
+      "chunker": "text"
+    },
+    {
+      "pattern": "^(?:README|AGENTS|ARCHITECTURE)\\.md$",
+      "source": "doc",
+      "priority": 4,
+      "chunker": "text"
+    },
+    {
+      "pattern": "^woocommerce-shipstation\\.php$",
+      "source": "plugin-bootstrap",
+      "priority": 5,
+      "chunker": "line"
+    },
+    {
+      "pattern": "^templates/.+\\.php$",
+      "source": "template",
+      "priority": 4,
+      "chunker": "line"
+    },
+    {
+      "pattern": "^includes/api/rest/.+\\.php$",
+      "source": "rest-controller",
+      "priority": 4,
+      "chunker": "line"
+    },
+    {
+      "pattern": "^includes/api/requests/.+\\.php$",
+      "source": "api-request",
+      "priority": 4,
+      "chunker": "line"
+    },
+    {
+      "pattern": "^includes/checkout/.+\\.php$",
+      "source": "checkout",
+      "priority": 4,
+      "chunker": "line"
+    },
+    {
+      "pattern": "^includes/data/.+\\.php$",
+      "source": "config",
+      "priority": 3,
+      "chunker": "line"
+    },
+    {
+      "pattern": "^includes/.+\\.php$",
+      "source": "php",
+      "priority": 4,
+      "chunker": "line"
+    },
+    {
+      "pattern": "^assets/js/.+\\.js$",
+      "source": "script",
+      "priority": 3,
+      "chunker": "line"
+    },
+    {
+      "pattern": "^assets/css/.+\\.css$",
+      "source": "style",
+      "priority": 2,
+      "chunker": "line"
+    }
+  ],
+  "default_classification": {
+    "source": "doc",
+    "priority": 1,
+    "chunker": "text"
+  }
+}

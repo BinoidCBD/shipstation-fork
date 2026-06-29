@@ -2,3 +2,4 @@
 temp/rag/
 temp/ask-self-rag.env
 .DS_Store
+/graphify-out

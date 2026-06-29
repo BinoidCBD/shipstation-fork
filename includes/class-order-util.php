@@ -195,6 +195,74 @@ class Order_Util {
 	}
 
 	/**
+	 * Determine whether an order line item should be treated as shippable for export.
+	 *
+	 * Normally this is just the product's own needs_shipping() flag. The one
+	 * exception is a WooCommerce Product Bundles "container" line item: when a
+	 * bundle is configured as "Assembled" the whole bundle ships as a single
+	 * physical parcel (the container), and Product Bundles records the immutable
+	 * order-time meta `_bundle_weight` on that container item. If the merchant
+	 * later switches the bundle to "Unassembled", the live bundle product is
+	 * forced virtual and its needs_shipping() returns false, which would
+	 * retroactively strip historical Assembled orders of their only shippable
+	 * line and leave ShipStation with nothing to ship and no ShipNotify to send
+	 * (SHIPSTN-138). The order-time `_bundle_weight` meta lets us keep treating
+	 * such a container as shippable, matching how the order was originally
+	 * exported.
+	 *
+	 * @since 5.1.2
+	 *
+	 * @param \WC_Order_Item         $item    Order line item.
+	 * @param \WC_Product|false|null $product Pre-fetched product for the item when
+	 *                                        available; pass null to resolve it here.
+	 *
+	 * @return bool
+	 */
+	public static function item_needs_shipping( $item, $product = null ): bool {
+		if ( null === $product ) {
+			$product = is_callable( array( $item, 'get_product' ) ) ? $item->get_product() : false;
+		}
+
+		// Items without a live product (fees, or a since-deleted product) have
+		// nothing to export and are never shippable.
+		if ( ! $product instanceof \WC_Product ) {
+			return false;
+		}
+
+		if ( $product->needs_shipping() ) {
+			return true;
+		}
+
+		// The product exists but reports no shipping. Keep an assembled bundle
+		// container shippable based on its immutable order-time state.
+		return self::is_assembled_bundle_container( $item );
+	}
+
+	/**
+	 * Whether the order item is a Product Bundles container that shipped as a
+	 * single assembled parcel at order time.
+	 *
+	 * Product Bundles writes the `_bundle_weight` meta on a container line item
+	 * only when the bundle needed shipping at purchase time, and never rewrites
+	 * it afterwards, so its presence is a reliable record that the container was
+	 * a physical shipment for this order regardless of the live product's
+	 * current virtual state.
+	 *
+	 * @since 5.1.2
+	 *
+	 * @param \WC_Order_Item $item Order line item.
+	 *
+	 * @return bool
+	 */
+	private static function is_assembled_bundle_container( $item ): bool {
+		if ( ! is_callable( array( $item, 'get_meta' ) ) ) {
+			return false;
+		}
+
+		return '' !== (string) $item->get_meta( '_bundle_weight', true );
+	}
+
+	/**
 	 * Check whether a given item ID is a shippable item.
 	 *
 	 * @since 4.7.6
@@ -206,10 +274,7 @@ class Order_Util {
 	 * @return bool Returns true if item is shippable product.
 	 */
 	public static function is_shippable_item( WC_Order $order, int $item_id ): bool {
-		$item    = $order->get_item( $item_id );
-		$product = is_callable( array( $item, 'get_product' ) ) ? $item->get_product() : false;
-
-		return $product ? $product->needs_shipping() : false;
+		return self::item_needs_shipping( $order->get_item( $item_id ) );
 	}
 
 	/**
@@ -227,11 +292,11 @@ class Order_Util {
 			$product = is_callable( array( $item, 'get_product' ) ) ? $item->get_product() : false;
 			$qty     = is_callable( array( $item, 'get_quantity' ) ) ? $item->get_quantity() : false;
 
-			if ( ! $product instanceof \WC_Product || false === $qty ) {
+			if ( false === $qty ) {
 				continue;
 			}
 
-			if ( $product->needs_shipping() ) {
+			if ( self::item_needs_shipping( $item, $product ) ) {
 				$needs_shipping += ( $qty - abs( $order->get_qty_refunded_for_item( $item_id ) ) );
 			}
 		}
@@ -314,6 +379,36 @@ class Order_Util {
 		}
 
 		return implode( ' | ', $shipping_method_names );
+	}
+
+	/**
+	 * Get the ShipStation Checkout Rates code stored on the order's shipping item(s).
+	 *
+	 * Reads the protected meta written when the customer selects a ShipStation rate
+	 * at checkout. Returns the first non-empty code found across the order's shipping
+	 * items, or '' when none carry one (e.g. a flat-rate shipment). The REST export
+	 * maps this to shipping_preferences.preplanned_fulfillment_id.
+	 *
+	 * @since 5.0.9
+	 *
+	 * @param WC_Order $order Order object.
+	 *
+	 * @return string Rate code (e.g. 'dos_…'), or '' when absent.
+	 */
+	public static function get_checkout_rate_code( WC_Order $order ): string {
+		foreach ( $order->get_shipping_methods() as $shipping_method ) {
+			if ( ! $shipping_method instanceof \WC_Order_Item_Shipping ) {
+				continue;
+			}
+
+			$rate_code = $shipping_method->get_meta( Checkout\Checkout_Rates_Options::RATE_CODE_META_KEY );
+
+			if ( is_scalar( $rate_code ) && '' !== (string) $rate_code ) {
+				return (string) $rate_code;
+			}
+		}
+
+		return '';
 	}
 
 	/**
@@ -455,23 +550,31 @@ class Order_Util {
 		$hpos    = self::custom_orders_table_usage_is_enabled();
 		$sync_on = self::data_sync_is_enabled();
 
-		// Build the list of tables to write to. Under HPOS sync mode both
-		// wc_orders_meta and wp_postmeta are live. WC's sync mechanism mirrors
-		// changes by listening to CRUD hooks — which a direct SQL write bypasses
-		// entirely — so we must keep both tables consistent ourselves.
-		//
-		// | HPOS | Sync | Tables written            |
-		// |------|------|---------------------------|
-		// | off  | off  | wp_postmeta               |
-		// | on   | off  | wc_orders_meta            |
-		// | on   | on   | wc_orders_meta + postmeta |
-		// | off  | on   | wp_postmeta + wc_orders_meta |
+		/*
+		 * Build the list of tables to write to. Under HPOS sync mode both
+		 * wc_orders_meta and wp_postmeta are live. WC's sync mechanism mirrors
+		 * changes by listening to CRUD hooks — which a direct SQL write bypasses
+		 * entirely — so we must keep both tables consistent ourselves.
+		 *
+		 * | HPOS | Sync | Tables written              |
+		 * |------|------|-----------------------------|
+		 * | off  | off  | wp_postmeta                 |
+		 * | on   | off  | wc_orders_meta              |
+		 * | on   | on   | wc_orders_meta + postmeta   |
+		 * | off  | on   | wp_postmeta + wc_orders_meta|
+		 */
 		$targets = array();
 		if ( $hpos || $sync_on ) {
-			$targets[] = array( 'table' => $wpdb->prefix . 'wc_orders_meta', 'col' => 'order_id' );
+			$targets[] = array(
+				'table' => $wpdb->prefix . 'wc_orders_meta',
+				'col'   => 'order_id',
+			);
 		}
 		if ( ! $hpos || $sync_on ) {
-			$targets[] = array( 'table' => $wpdb->postmeta, 'col' => 'post_id' );
+			$targets[] = array(
+				'table' => $wpdb->postmeta,
+				'col'   => 'post_id',
+			);
 		}
 
 		// Neither `wp_postmeta` nor `wc_orders_meta` has a UNIQUE index on
@@ -746,7 +849,7 @@ class Order_Util {
 			if ( ! isset( self::$order_notes_cache[ $order_id ] ) ) {
 				continue;
 			}
-			$bucket                                            = get_comment_meta( $note->comment_ID, 'is_customer_note', true ) ? 'customer' : 'private';
+			$bucket = get_comment_meta( $note->comment_ID, 'is_customer_note', true ) ? 'customer' : 'private';
 			self::$order_notes_cache[ $order_id ][ $bucket ][] = html_entity_decode( $note->comment_content, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 		}
 	}

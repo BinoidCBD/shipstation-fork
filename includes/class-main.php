@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use Automattic\WooCommerce\Utilities\FeaturesUtil;
+use WooCommerce\Shipping\ShipStation\Checkout\Checkout_Rates_Options;
 use WooCommerce\Shipping\ShipStation\Checkout\Checkout_Rates_Shipping_Method;
 use WooCommerce\Shipping\ShipStation\REST_API_Loader;
 use WC_ShipStation_Privacy;
@@ -93,10 +94,20 @@ class Main {
 		$this->load_files();
 		$this->maybe_init_wpcom_connection();
 
+		// Create/upgrade the ShipStation connection-log table when needed
+		// (version-gated; a no-op once installed).
+		Connection_Log::maybe_install();
+
+		// Wire the daily Action Scheduler job that prunes never-used plugin API
+		// keys (SHIPSTN-142 credentials redesign). Registers its handler and
+		// schedules the recurring action on `init`.
+		Auth_Controller::register_orphan_prune();
+
 		add_action( 'before_woocommerce_init', array( $this, 'before_woocommerce_init' ) );
 		add_action( 'woocommerce_init', array( $this, 'load_rest_api' ) );
 
 		add_filter( 'woocommerce_shipping_methods', array( $this, 'register_shipping_methods' ) );
+		add_filter( 'woocommerce_hidden_order_itemmeta', array( $this, 'hide_internal_order_item_meta' ) );
 	}
 
 	/**
@@ -105,7 +116,22 @@ class Main {
 	 * @return void
 	 */
 	protected function maybe_init_wpcom_connection(): void {
-		if ( ! Features::is_wpcom_transport_enabled() ) {
+		// The transport toggle gates whether ShipStation requests are *routed*
+		// through WordPress.com. In the admin, though, always make the connection
+		// available so the settings tab can render — and operate — the
+		// connect/disconnect controls regardless of the toggle (the controls are
+		// CSS-hidden until the checkbox is ticked, so the status is "already there"
+		// when it is enabled). The bootstrap's admin hooks all no-op without a
+		// pending connect/disconnect action, so this is safe on any admin page.
+		// Frontend and REST stay gated by the toggle, preserving request routing.
+		if ( ! Features::is_wpcom_transport_enabled() && ! is_admin() ) {
+			return;
+		}
+
+		// get_wpcom_connection() re-runs this lazily, so a caller can reach it
+		// before load_files() has required the class (early boot or a partial
+		// install). Stay at "no facade" rather than fataling.
+		if ( ! class_exists( WPCOM_Connection::class ) ) {
 			return;
 		}
 
@@ -116,9 +142,19 @@ class Main {
 	/**
 	 * WPCOM connection facade accessor.
 	 *
+	 * Re-runs the gated init when the facade is missing: the settings-checkbox
+	 * source of the feature flag can turn on after plugins_loaded (the settings
+	 * save persists mid-request), in which case maybe_init_wpcom_connection()
+	 * already skipped. Late bootstrap still wires this request's admin hooks;
+	 * Jetpack's own plugins_loaded-time configuration completes on the next load.
+	 *
 	 * @return WPCOM_Connection|null Null when the feature flag is off.
 	 */
 	public function get_wpcom_connection(): ?WPCOM_Connection {
+		if ( null === $this->wpcom_connection ) {
+			$this->maybe_init_wpcom_connection();
+		}
+
 		return $this->wpcom_connection;
 	}
 
@@ -139,10 +175,22 @@ class Main {
 	public function load_files() {
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/class-features.php';
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/class-order-util.php';
+		require_once WC_SHIPSTATION_ABSPATH . 'includes/class-connection-log.php';
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/class-wpcom-connection.php';
 		include_once WC_SHIPSTATION_ABSPATH . 'includes/class-wc-shipstation-integration.php';
 		include_once WC_SHIPSTATION_ABSPATH . 'includes/class-auth-controller.php';
+		include_once WC_SHIPSTATION_ABSPATH . 'includes/class-global-connection-banner.php';
 		include_once WC_SHIPSTATION_ABSPATH . 'includes/class-logger.php';
+
+		// Options class is side-effect-free and is reached from data-settings.php
+		// regardless of the feature flag's timing, so load it unconditionally.
+		// It owns SHIPPING_METHOD_ID, so the settings gate and zone-method
+		// lookups need nothing from the shipping method class. The shipping
+		// method and the rest of the Checkout Rates infrastructure (validator,
+		// builder, mapper, API client) load lazily in register_shipping_methods()
+		// because they're only needed when actually calculating rates at checkout.
+		include_once WC_SHIPSTATION_ABSPATH . 'includes/checkout/class-checkout-rates-options.php';
+
 		include_once WC_SHIPSTATION_ABSPATH . 'includes/class-wc-shipstation-privacy.php';
 		include_once WC_SHIPSTATION_ABSPATH . 'includes/class-wc-shipstation-api.php';
 
@@ -196,8 +244,22 @@ class Main {
 			return $methods;
 		}
 
+		// Checkout Rates can only be provisioned over the REST API — ShipStation pushes
+		// the rates URL via a REST endpoint and there is no XML path. Without a stored
+		// rates URL the method can never return rates, so don't offer it in the shipping
+		// zone's method list. Mirrors the runtime gate in
+		// Checkout_Rates_Shipping_Method::calculate_shipping().
+		if ( ! Checkout_Rates_Options::is_configured() ) {
+			return $methods;
+		}
+
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/checkout/interface-checkout-rates-api-client.php';
+		require_once WC_SHIPSTATION_ABSPATH . 'includes/checkout/class-shipstation-unit-converter.php';
+		require_once WC_SHIPSTATION_ABSPATH . 'includes/checkout/class-checkout-rates-invalid-payload-exception.php';
+		require_once WC_SHIPSTATION_ABSPATH . 'includes/checkout/class-checkout-rates-payload-validator.php';
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/checkout/class-checkout-rates-request-builder.php';
+		require_once WC_SHIPSTATION_ABSPATH . 'includes/checkout/class-checkout-rates-response-mapper.php';
+		require_once WC_SHIPSTATION_ABSPATH . 'includes/checkout/class-checkout-rates-api-client.php';
 		require_once WC_SHIPSTATION_ABSPATH . 'includes/checkout/class-checkout-rates-shipping-method.php';
 
 		$methods['shipstation_checkout_rates'] = Checkout_Rates_Shipping_Method::class;
@@ -261,5 +323,24 @@ class Main {
 		if ( class_exists( '\Automattic\WooCommerce\Utilities\FeaturesUtil' ) ) {
 			FeaturesUtil::declare_compatibility( 'custom_order_tables', WC_SHIPSTATION_FILE, true );
 		}
+	}
+
+	/**
+	 * Hide ShipStation Checkout Rates internal shipping-item meta from the admin
+	 * order screen and orders list table. The underscore prefix already hides
+	 * these from the storefront, emails, and the Store API; wp-admin renders item
+	 * meta with an empty hide-prefix, so it needs the allow-list filter instead.
+	 *
+	 * @since 5.0.9
+	 *
+	 * @param array $hidden Hidden order item meta keys.
+	 *
+	 * @return array
+	 */
+	public function hide_internal_order_item_meta( array $hidden ): array {
+		$hidden[] = Checkout_Rates_Options::RATE_CODE_META_KEY;
+		$hidden[] = Checkout_Rates_Options::QUOTE_ID_META_KEY;
+
+		return $hidden;
 	}
 }

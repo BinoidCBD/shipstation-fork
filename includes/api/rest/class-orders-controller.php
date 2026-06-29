@@ -30,6 +30,8 @@ use WooCommerce\Shipping\ShipStation\Order_Util;
 use WooCommerce\Shipping\ShipStation\Checkout;
 use Automattic\WooCommerce\Utilities\NumberUtil;
 use Automattic\WooCommerce\Enums\OrderStatus;
+use WP_Error;
+use WooCommerce\Shipping\ShipStation\Logger;
 
 /**
  * Orders_Controller class.
@@ -201,6 +203,34 @@ class Orders_Controller extends API_Controller {
 							return is_array( $value ) ? $value : array( $value );
 						},
 					),
+					'order_ids'      => array(
+						'description'       => __( 'Return specific orders by ID. When present, page/per_page/modified_after are ignored and orders are returned regardless of status.', 'woocommerce-shipstation-integration' ),
+						'type'              => 'array',
+						'items'             => array( 'type' => 'integer' ),
+						'validate_callback' => function ( $value ) {
+							if ( is_array( $value ) && count( $value ) > 500 ) {
+								return new WP_Error(
+									'rest_invalid_param',
+									__( 'order_ids[] must contain 500 or fewer IDs.', 'woocommerce-shipstation-integration' ),
+									array( 'status' => 400 )
+								);
+							}
+							return true;
+						},
+						'sanitize_callback' => function ( $value ) {
+							if ( empty( $value ) || ! is_array( $value ) ) {
+								return array();
+							}
+							return array_values(
+								array_filter(
+									array_map( 'absint', $value ),
+									function ( $id ) {
+										return $id > 0;
+									}
+								)
+							);
+						},
+					),
 				),
 			)
 		);
@@ -218,35 +248,23 @@ class Orders_Controller extends API_Controller {
 	}
 
 	/**
-	 * REST API permission callback.
+	 * REST API permission callback for GET /orders.
 	 *
-	 * @return boolean
+	 * @param WP_REST_Request $request Current REST request.
+	 * @return bool|WP_Error See API_Controller::check_namespace_permission().
 	 */
-	public function check_get_permission(): bool {
-		/**
-		 * Filters whether the current user has permissions to manage WooCommerce.
-		 *
-		 * @since 1.0.0
-		 *
-		 * @param bool $can_manage_wc Whether the user can manage WooCommerce.
-		 */
-		return apply_filters( 'wc_shipstation_user_can_manage_wc', wc_rest_check_manager_permissions( 'attributes', 'read' ) );
+	public function check_get_permission( WP_REST_Request $request ) {
+		return $this->check_namespace_permission( $request, 'attributes', 'read' );
 	}
 
 	/**
-	 * REST API permission callback.
+	 * REST API permission callback for POST /orders/shipments.
 	 *
-	 * @return boolean
+	 * @param WP_REST_Request $request Current REST request.
+	 * @return bool|WP_Error See API_Controller::check_namespace_permission().
 	 */
-	public function check_update_permission(): bool {
-		/**
-		 * Filters whether the current user has permissions to manage WooCommerce.
-		 *
-		 * @since 1.0.0
-		 *
-		 * @param bool $can_manage_wc Whether the user can manage WooCommerce.
-		 */
-		return apply_filters( 'wc_shipstation_user_can_manage_wc', wc_rest_check_manager_permissions( 'attributes', 'create' ) );
+	public function check_update_permission( WP_REST_Request $request ) {
+		return $this->check_namespace_permission( $request, 'attributes', 'create' );
 	}
 
 	/**
@@ -273,13 +291,18 @@ class Orders_Controller extends API_Controller {
 	}
 
 	/**
-	 * Get the shipstation status from WC order status.
+	 * Map a WooCommerce order status to its ShipStation `SalesOrderStatus`.
 	 *
-	 * @param string $order_status The order status to map.
+	 * A status with no mapping falls back to `OnHold`, which holds the order for
+	 * review instead of auto-shipping it: an unmapped status's intent is unknown,
+	 * and a hold is recoverable while a shipment is not (SHIPSTN-131).
 	 *
-	 * @return string
+	 * @param string        $order_status The WC order status to map.
+	 * @param WC_Order|null $order        The order being exported, for log context. Optional.
+	 *
+	 * @return string A ShipStation `SalesOrderStatus` value.
 	 */
-	public function get_shipstation_status_from_order( string $order_status ): string {
+	public function get_shipstation_status_from_order( string $order_status, ?WC_Order $order = null ): string {
 		$status_mapping = $this->get_order_status_mapping();
 
 		foreach ( $status_mapping as $shipstation_status => $wc_statuses ) {
@@ -292,7 +315,18 @@ class Orders_Controller extends API_Controller {
 			return WC_ShipStation_Integration::CANCELLED_STATUS;
 		}
 
-		return 'Unknown';
+		// No mapping for this WC status. Default to OnHold — a valid
+		// SalesOrderStatus — so the order still imports but is gated for human
+		// review rather than auto-shipped (an unknown status could mean
+		// "do-not-ship", and holding is recoverable whereas auto-shipping is not).
+		$shipstation_status = WC_ShipStation_Integration::ON_HOLD_STATUS;
+
+		if ( $order instanceof WC_Order ) {
+			// translators: 1: order id, 2: WC order status, 3: shipstation order status.
+			$this->log( sprintf( __( 'Order %1$s has an unmapped WooCommerce status (%2$s). Defaulting to ShipStation status "%3$s". Please review your status mappings.', 'woocommerce-shipstation-integration' ), $order->get_id(), $order_status, $shipstation_status ) );
+		}
+
+		return $shipstation_status;
 	}
 
 	/**
@@ -340,11 +374,28 @@ class Orders_Controller extends API_Controller {
 		// Ensure third-party export filters (e.g. Product Bundles) are loaded.
 		$this->fire_legacy_api_action();
 
+		// When specific IDs are requested, bypass the normal date/pagination query.
+		// The sanitize_callback already returns a clean list of positive integer IDs;
+		// the cast only guards against a non-array value from a direct/internal caller.
+		$order_ids_param = isset( $request_params['order_ids'] )
+			? (array) $request_params['order_ids']
+			: array();
+
+		if ( ! empty( $order_ids_param ) ) {
+			return $this->get_orders_by_id_param( $order_ids_param );
+		}
+
 		// Get parameters.
 		$modified_after = isset( $request_params['modified_after'] ) ? strtotime( $request_params['modified_after'] ) : null;
 		$page           = absint( $request_params['page'] ); // Default to page 1.
 		$per_page       = intval( $request_params['per_page'] ); // Default to 100 items per page.
-		$status_mapping = isset( $request_params['status_mapping'] ) ? $request_params['status_mapping'] : array();
+		// In Manual status-mapping mode the merchant owns the export-status list and
+		// custom statuses ShipStation never sees must still be honored, so the
+		// `status_mapping` request param is ignored — only API mode lets ShipStation
+		// dictate the per-request status filter (SHIPSTN-117).
+		$status_mapping = ( WC_ShipStation_Integration::STATUS_MODE_API === WC_ShipStation_Integration::$status_mode && isset( $request_params['status_mapping'] ) )
+			? $request_params['status_mapping']
+			: array();
 
 		$status_mapping = is_array( $status_mapping ) ? wc_clean( $status_mapping ) : array( wc_clean( $status_mapping ) );
 		$order_statuses = array();
@@ -480,6 +531,94 @@ class Orders_Controller extends API_Controller {
 	}
 
 	/**
+	 * Fetch and map a specific set of orders by WC order ID.
+	 *
+	 * Called when the `order_ids` request parameter is present. Bypasses
+	 * the normal modified_after/pagination query and returns orders regardless
+	 * of their WC status. IDs not found in the database are logged as warnings
+	 * and omitted from the response.
+	 *
+	 * @since 5.1.0
+	 *
+	 * @param int[] $requested_ids Sanitised list of positive integer order IDs.
+	 * @return WP_REST_Response
+	 */
+	private function get_orders_by_id_param( array $requested_ids ): WP_REST_Response {
+		$orders_by_id = $this->get_orders_by_ids( $requested_ids, array( 'status' => 'any' ) );
+		$this->prime_batch_caches( array_keys( $orders_by_id ) );
+		Order_Util::prime_products_for_batch( $orders_by_id );
+
+		$sales_orders   = array();
+		$orders_to_mark = array();
+
+		foreach ( $requested_ids as $order_id ) {
+			$order_id = (int) $order_id;
+
+			/**
+			 * Allow third party to skip the export of certain order ID.
+			 *
+			 * @param boolean $flag     Flag to skip the export.
+			 * @param int     $order_id Order ID.
+			 *
+			 * @since 4.1.42
+			 */
+			if ( ! apply_filters( 'woocommerce_shipstation_export_order', true, $order_id ) ) {
+				continue;
+			}
+
+			if ( ! isset( $orders_by_id[ $order_id ] ) ) {
+				Logger::warning(
+					sprintf(
+						/* translators: %d: WC order ID requested via order_ids[] that was not found. */
+						__( 'order_ids fetch: order %d not found.', 'woocommerce-shipstation-integration' ),
+						$order_id
+					)
+				);
+				continue;
+			}
+
+			/**
+			 * Allow third party to change the order object.
+			 *
+			 * @param WC_Order $order Order object.
+			 *
+			 * @since 4.1.42
+			 */
+			$order = apply_filters(
+				'woocommerce_shipstation_export_get_order',
+				$orders_by_id[ $order_id ]
+			);
+
+			if ( ! Order_Util::is_wc_order( $order ) ) {
+				/* translators: 1: order id */
+				$this->log( sprintf( __( 'Order %s can not be found.', 'woocommerce-shipstation-integration' ), $order_id ) );
+				continue;
+			}
+
+			$sales_orders[]   = $this->get_order_data( $order );
+			$orders_to_mark[] = $order;
+		}
+
+		Order_Util::mark_orders_exported_bulk( $orders_to_mark );
+
+		$count = count( $sales_orders );
+
+		return new WP_REST_Response(
+			array(
+				'sales_orders' => $sales_orders,
+				'pagination'   => array(
+					'page'        => 1,
+					'per_page'    => $count,
+					'total'       => $count,
+					'total_pages' => 1,
+					'has_more'    => false,
+				),
+			),
+			200
+		);
+	}
+
+	/**
 	 * Bulk-fetch orders and return them indexed by ID.
 	 *
 	 * This is intentionally a second query. The upstream `wc_get_orders()` call in
@@ -498,20 +637,25 @@ class Orders_Controller extends API_Controller {
 	 * follow are cache hits.
 	 *
 	 * @since 5.0.4
+	 * @since 5.1.0 Added the $extra_query_args parameter.
 	 *
-	 * @param int[] $order_ids Order IDs to fetch.
+	 * @param int[] $order_ids        Order IDs to fetch.
+	 * @param array $extra_query_args Optional extra args merged into the wc_get_orders() call.
 	 * @return array<int, WC_Order> Order objects indexed by ID.
 	 */
-	private function get_orders_by_ids( array $order_ids ): array {
+	private function get_orders_by_ids( array $order_ids, array $extra_query_args = array() ): array {
 		if ( empty( $order_ids ) ) {
 			return array();
 		}
 
 		$orders = wc_get_orders(
-			array(
-				'type'     => 'shop_order',
-				'post__in' => $order_ids,
-				'limit'    => -1,
+			array_merge(
+				array(
+					'type'     => 'shop_order',
+					'post__in' => $order_ids,
+					'limit'    => -1,
+				),
+				$extra_query_args
 			)
 		);
 
@@ -564,12 +708,7 @@ class Orders_Controller extends API_Controller {
 		$paid_date     = $this->get_shipstation_date_format( $order->get_date_paid() );
 
 		$formatted_order_number   = ltrim( $order->get_order_number(), '#' );
-		$shipstation_order_status = $this->get_shipstation_status_from_order( $order->get_status() );
-
-		if ( 'Unknown' === $shipstation_order_status ) {
-			// translators: 1: order id, 2: WC order status, 3: shipstation order status.
-			$this->log( sprintf( __( 'Order %1$s has an unmapped WooCommerce status (%2$s). Defaulting to ShipStation status "%3$s". Please review your status mappings.', 'woocommerce-shipstation-integration' ), $order->get_id(), $order->get_status(), $shipstation_order_status ) );
-		}
+		$shipstation_order_status = $this->get_shipstation_status_from_order( $order->get_status(), $order );
 
 		$order_data = array(
 			'order_id'               => $order->get_id(),
@@ -941,6 +1080,19 @@ class Orders_Controller extends API_Controller {
 		$gift         = $this->get_gift( $order );
 		$address_data = Order_Util::get_address_data( $order );
 
+		$shipping_preferences = array(
+			'gift'             => $gift['is_gift'],
+			'shipping_service' => Order_Util::get_shipping_methods( $order, false ),
+		);
+
+		// Surface the customer's selected ShipStation Checkout Rates code so
+		// ShipStation can auto-assign the chosen carrier service. Omitted entirely
+		// when the order has no ShipStation rate code (e.g. a flat-rate shipment).
+		$preplanned_fulfillment_id = Order_Util::get_checkout_rate_code( $order );
+		if ( '' !== $preplanned_fulfillment_id ) {
+			$shipping_preferences['preplanned_fulfillment_id'] = $preplanned_fulfillment_id;
+		}
+
 		return array(
 			'requested_fulfillment_id' => $fulfillment_id,
 			'ship_to'                  => array(
@@ -956,10 +1108,7 @@ class Orders_Controller extends API_Controller {
 			),
 			'items'                    => $fulfillment_items,
 			'extensions'               => $this->get_custom_fields( $order ),
-			'shipping_preferences'     => array(
-				'gift'             => $gift['is_gift'],
-				'shipping_service' => Order_Util::get_shipping_methods( $order, false ),
-			),
+			'shipping_preferences'     => $shipping_preferences,
 		);
 	}
 
@@ -981,7 +1130,8 @@ class Orders_Controller extends API_Controller {
 		$item_id                 = $item->get_id();
 		$is_order_item_a_product = $item instanceof WC_Order_Item_Product;
 		$product                 = $is_order_item_a_product ? $item->get_product() : false;
-		$item_needs_no_shipping  = ! $product || ! $product->needs_shipping();
+		$item_needs_shipping     = Order_Util::item_needs_shipping( $item, $product );
+		$item_needs_no_shipping  = ! $item_needs_shipping;
 		$item_not_a_fee          = 'fee' !== $item->get_type();
 
 		/**
@@ -1010,7 +1160,7 @@ class Orders_Controller extends API_Controller {
 		}
 
 		// handle product specific data.
-		if ( $is_order_item_a_product && $product && $product->needs_shipping() ) {
+		if ( $is_order_item_a_product && $product && $item_needs_shipping ) {
 			/**
 			 * Handle product specific data.
 			 *
@@ -1593,6 +1743,10 @@ class Orders_Controller extends API_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function update_orders_shipments( WP_REST_Request $request ): WP_REST_Response {
+		// Ensure third-party shipnotify filters (e.g. Composite Products) are loaded.
+		// Mirrors the same call in get_orders() — see fire_legacy_api_action() for details.
+		$this->fire_legacy_api_action();
+
 		$request_params = $request->get_json_params();
 		$notifications  = isset( $request_params['notifications'] ) && is_array( $request_params['notifications'] ) ? $request_params['notifications'] : array();
 
@@ -1626,17 +1780,17 @@ class Orders_Controller extends API_Controller {
 				continue; // Skip if notification ID is not set.
 			}
 
-			if ( empty( $notification['order_id'] ) || empty( $notification['items'] ) || ! is_array( $notification['items'] ) ) {
+			if ( empty( $notification['order_id'] ) ) {
 				$response[] = array(
 					'notification_id' => $notification['notification_id'],
 					'status'          => 'failure',
-					'failure_reason'  => __( 'Empty order ID or items', 'woocommerce-shipstation-integration' ),
+					'failure_reason'  => __( 'Empty order ID', 'woocommerce-shipstation-integration' ),
 				);
 
 				// translators: %1$s is the notification id.
-				$this->log( sprintf( __( 'Notification ID: %1$s doesnt have order ID or items.', 'woocommerce-shipstation-integration' ), $notification['notification_id'] ) );
+				$this->log( sprintf( __( 'Notification ID: %1$s doesnt have order ID.', 'woocommerce-shipstation-integration' ), $notification['notification_id'] ) );
 
-				continue; // Skip invalid items.
+				continue; // Skip notification without order ID.
 			}
 
 			if ( ! is_numeric( $notification['order_id'] ) ) {
@@ -1686,7 +1840,19 @@ class Orders_Controller extends API_Controller {
 
 			$saved_items = array();
 
-			foreach ( $notification['items'] as $item ) {
+			// Normalize items: ShipStation may omit this field or send an empty list
+			// when items were replaced before shipping. Fall back to an empty array
+			// so process_items() writes the generic tracking note — matching the XML
+			// shipnotify handler's behavior for an empty <Items> element, which also
+			// writes the note without transitioning the order (the XML handler's
+			// "ship entire order" branch only fires on transport-level failures:
+			// empty POST body or missing SimpleXML extension, neither of which has
+			// a JSON analog since malformed REST bodies are rejected upstream).
+			$items_payload = isset( $notification['items'] ) && is_array( $notification['items'] )
+				? $notification['items']
+				: array();
+
+			foreach ( $items_payload as $item ) {
 				if ( empty( $item['description'] ) && empty( $item['quantity'] ) ) {
 					$this->log( __( 'Skipped this item because doesnt have description and quantity: ', 'woocommerce-shipstation-integration' ) . print_r( $item, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_print_r --- Its needed for logging
 					continue; // Skip if required fields are not set.
@@ -1750,10 +1916,8 @@ class Orders_Controller extends API_Controller {
 				$saved_notification['notes'] = $this->parse_notes( $notification['notes'] );
 			}
 
-			if ( ! empty( $saved_items ) ) {
-				$saved_notification['items'] = $saved_items;
-				$this->process_items( $saved_items, $order, $saved_notification );
-			}
+			$saved_notification['items'] = $saved_items;
+			$this->process_items( $saved_items, $order, $saved_notification );
 
 			$response[] = array(
 				'notification_id' => $notification['notification_id'],
@@ -2044,12 +2208,12 @@ class Orders_Controller extends API_Controller {
 	 *
 	 * Plugins like WooCommerce Product Bundles hook into this
 	 * action to register filters on woocommerce_order_get_items and
-	 * woocommerce_order_item_product that reshape order items for export.
+	 * woocommerce_order_item_product that reshape order items.
 	 *
 	 * In the XML API path the action fires naturally via WooCommerce's
 	 * legacy API mechanism, but the REST API path never triggers it.
 	 * Calling this method at the top of the REST endpoint ensures those
-	 * third-party filters are in place before any order items are retrieved.
+	 * third-party filters are in place before order items are read.
 	 *
 	 * @return void
 	 */

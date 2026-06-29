@@ -366,6 +366,26 @@ return array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Requests/WC_Shipstation_API_Export_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Assembled_Bundle_Export_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Assembled_Bundle_Export_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Checkout_Rates_Controller_Permission_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Checkout_Rates_Controller_Permission_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Checkout_Rates_Controller_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Checkout_Rates_Controller_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Diagnostics_Controller_Get_Details_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Diagnostics_Controller_Get_Details_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Diagnostics_Controller_Permission_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Diagnostics_Controller_Permission_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Get_Fulfillment_Items_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Rest/Get_Fulfillment_Items_Test.php'
@@ -374,48 +394,148 @@ return array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Rest/Get_Item_Details_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Inventory_Controller_Permission_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Inventory_Controller_Permission_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Orders_Controller_Permission_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Orders_Controller_Permission_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Orders_Controller_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Rest/Orders_Controller_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Permission_Test_Trait' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Permission_Test_Trait.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Transport_Recording_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Transport_Recording_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Update_Orders_Shipments_Empty_Items_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Update_Orders_Shipments_Empty_Items_Test.php'
 	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Update_Orders_Shipments_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Rest/Update_Orders_Shipments_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Auth_Controller_Key_Sets_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Auth_Controller_Key_Sets_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Auth_Controller_Orphan_Prune_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Auth_Controller_Orphan_Prune_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Auth_Controller_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Auth_Controller_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Capturing_Logger_For_Validator' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/Capturing_Logger_For_Validator.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Capturing_WC_Logger' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/Capturing_WC_Logger.php'
 	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Api_Client_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Api_Client_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Options_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Options_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Order_Item_Meta_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Order_Item_Meta_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Payload_Validator_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Payload_Validator_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Request_Builder_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Request_Builder_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Request_Builder_Validation_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Request_Builder_Validation_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Response_Mapper_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Response_Mapper_Test.php'
 	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Shipping_Method_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Shipping_Method_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Data_Settings_Checkout_Rates_Field_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/Data_Settings_Checkout_Rates_Field_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Passthrough_WC_Logger' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/Passthrough_WC_Logger.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\ShipStation_Unit_Converter_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/ShipStation_Unit_Converter_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Stub_Checkout_Rates_Api_Client' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Checkout/Stub_Checkout_Rates_Api_Client.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Connection_Log_Health_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Connection_Log_Health_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Connection_Log_Key_Rollup_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Connection_Log_Key_Rollup_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Connection_Log_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Connection_Log_Test.php'
 	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Features_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Features_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Get_Checkout_Rate_Code_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Get_Checkout_Rate_Code_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Get_Order_Notes_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Order_Util_Get_Order_Notes_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Item_Needs_Shipping_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Item_Needs_Shipping_Test.php'
 	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\REST_API_Loader_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/REST_API_Loader_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Status_Mapping_Mode_UX_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Status_Mapping_Mode_UX_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Unmapped_Custom_Status_Notice_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Unmapped_Custom_Status_Notice_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\WPCOM_Connection_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/WPCOM_Connection_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\WPCOM_Transport_Settings_Save_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/WPCOM_Transport_Settings_Save_Test.php'
 	),
 );

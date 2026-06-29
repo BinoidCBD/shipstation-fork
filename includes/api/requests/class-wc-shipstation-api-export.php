@@ -366,7 +366,8 @@ class WC_Shipstation_API_Export extends WC_Shipstation_API_Request {
 			$order_items = $order->get_items() + $order->get_items( 'fee' );
 			foreach ( $order_items as $item_id => $item ) {
 				$product                = is_callable( array( $item, 'get_product' ) ) ? $item->get_product() : false;
-				$item_needs_no_shipping = ! $product || ! $product->needs_shipping();
+				$item_needs_shipping    = Order_Util::item_needs_shipping( $item, $product );
+				$item_needs_no_shipping = ! $item_needs_shipping;
 				$item_not_a_fee         = 'fee' !== $item->get_type();
 
 				/**
@@ -397,7 +398,7 @@ class WC_Shipstation_API_Export extends WC_Shipstation_API_Request {
 				}
 
 				// handle product specific data.
-				if ( $product && $product->needs_shipping() ) {
+				if ( $product && $item_needs_shipping ) {
 					$this->xml_append( $item_xml, 'SKU', $product->get_sku() );
 					$this->xml_append( $item_xml, 'Name', $item->get_name() );
 					// image data.

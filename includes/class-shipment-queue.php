@@ -250,6 +250,33 @@ class Shipment_Queue {
 	}
 
 	/**
+	 * Refresh the claim timestamp on all of this worker's still-processing rows.
+	 *
+	 * Called once per row while draining a batch so a long batch (the exact slow-DB
+	 * burst this queue absorbs) cannot outlive the stale-reclaim window and have its
+	 * in-flight rows reclaimed and double-processed by another worker. While the
+	 * worker makes progress the whole claimed set stays fresh; if the worker dies the
+	 * heartbeat stops and reclaim_stale() recovers the rows as intended.
+	 *
+	 * @param string $token This worker's claim token.
+	 * @return void
+	 */
+	public static function heartbeat( string $token ): void {
+		global $wpdb;
+
+		$table = self::table_name();
+
+		$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->prepare(
+				"UPDATE {$table} SET locked_at = %s WHERE locked_by = %s AND status = %s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				current_time( 'mysql', true ),
+				$token,
+				self::STATUS_PROCESSING
+			)
+		);
+	}
+
+	/**
 	 * Mark a claimed row processed.
 	 *
 	 * @param int $id Row id.
@@ -282,9 +309,9 @@ class Shipment_Queue {
 	 * @param string $error        Failure message.
 	 * @param int    $max_attempts Attempt cap.
 	 *
-	 * @return void
+	 * @return bool True when the row was marked permanently failed (terminal), false when requeued for retry.
 	 */
-	public static function mark_failed_or_retry( int $id, int $attempts, string $error, int $max_attempts ): void {
+	public static function mark_failed_or_retry( int $id, int $attempts, string $error, int $max_attempts ): bool {
 		global $wpdb;
 
 		$table = self::table_name();
@@ -301,7 +328,7 @@ class Shipment_Queue {
 				)
 			);
 
-			return;
+			return true;
 		}
 
 		// Exponential backoff: 2^attempts minutes, capped at one hour.
@@ -316,6 +343,46 @@ class Shipment_Queue {
 				$error,
 				$now,
 				$id
+			)
+		);
+
+		return false;
+	}
+
+	/**
+	 * Apply a failure to a claimed row: retry with backoff, or permanently fail it
+	 * once the attempt cap is hit — and when terminal, log loudly with the
+	 * notification context. ShipStation was already ACKed, so a silent drop here
+	 * would lose the shipment unnoticed.
+	 *
+	 * @param array  $row          The claimed queue row (associative).
+	 * @param int    $attempts     Attempts already recorded for the row.
+	 * @param string $error        Failure message.
+	 * @param int    $max_attempts Attempt cap.
+	 * @return void
+	 */
+	private static function fail( array $row, int $attempts, string $error, int $max_attempts ): void {
+		$terminal = self::mark_failed_or_retry( (int) $row['id'], $attempts, $error, $max_attempts );
+
+		if ( $terminal ) {
+			Logger::error(
+				sprintf(
+					'ShipStation shipment-queue: notification %s (order %s) permanently failed after %d attempts: %s',
+					(string) $row['notification_id'],
+					(string) $row['order_ref'],
+					$attempts,
+					$error
+				)
+			);
+			return;
+		}
+
+		Logger::debug(
+			sprintf(
+				'ShipStation shipment-queue: notification %s will retry (attempt %d): %s',
+				(string) $row['notification_id'],
+				$attempts,
+				$error
 			)
 		);
 	}
@@ -488,12 +555,17 @@ class Shipment_Queue {
 		}
 
 		foreach ( $rows as $row ) {
+			// Keep this worker's whole in-flight claim fresh so a slow batch cannot
+			// outlive the stale-reclaim window and be double-processed by another
+			// worker (relay review [Blocker]).
+			self::heartbeat( $token );
+
 			$id           = (int) $row['id'];
 			$attempts     = (int) $row['attempts'];
 			$notification = json_decode( (string) $row['payload'], true );
 
 			if ( ! is_array( $notification ) ) {
-				self::mark_failed_or_retry( $id, $attempts, 'Unreadable payload JSON', $max_attempts );
+				self::fail( $row, $attempts, 'Unreadable payload JSON', $max_attempts );
 				continue;
 			}
 
@@ -512,13 +584,12 @@ class Shipment_Queue {
 				// dropping them here would lose the shipment.
 				if ( is_array( $result ) && isset( $result['status'] ) && 'failure' === $result['status'] ) {
 					$reason = isset( $result['failure_reason'] ) ? (string) $result['failure_reason'] : 'Processing failed';
-					self::mark_failed_or_retry( $id, $attempts, $reason, $max_attempts );
+					self::fail( $row, $attempts, $reason, $max_attempts );
 				} else {
 					self::mark_done( $id );
 				}
 			} catch ( \Throwable $e ) {
-				Logger::error( 'ShipStation shipment-queue processing failed for notification ' . (string) $row['notification_id'] . ': ' . $e->getMessage() );
-				self::mark_failed_or_retry( $id, $attempts, $e->getMessage(), $max_attempts );
+				self::fail( $row, $attempts, $e->getMessage(), $max_attempts );
 			}
 		}
 

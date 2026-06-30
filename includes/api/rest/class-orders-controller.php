@@ -1812,6 +1812,35 @@ class Orders_Controller extends API_Controller {
 				continue;
 			}
 
+			// Fail fast on deterministic (non-transient) problems rather than queuing
+			// them only for the worker to retry over hours before giving up. These
+			// mirror the synchronous path's per-notification failures and report the
+			// same result to ShipStation. "Order not found" is deliberately NOT
+			// short-circuited here — it can be transient while an order is still
+			// replicating across HPOS tables — so it still goes to the queue and is
+			// retried by the worker (GH-9 L1).
+			if ( empty( $notification['order_id'] ) ) {
+				// translators: %1$s is the notification id.
+				$this->log( sprintf( __( 'Notification ID: %1$s doesnt have order ID.', 'woocommerce-shipstation-integration' ), $notification_id ) );
+				$response[] = array(
+					'notification_id' => $notification_id,
+					'status'          => 'failure',
+					'failure_reason'  => __( 'Empty order ID', 'woocommerce-shipstation-integration' ),
+				);
+				continue;
+			}
+
+			if ( ! is_numeric( $notification['order_id'] ) ) {
+				// translators: %1$s is the order id, %2$s is the notification id.
+				$this->log( sprintf( __( 'Order ID: %1$s from notification ID: %2$s is not numeric.', 'woocommerce-shipstation-integration' ), (string) $notification['order_id'], $notification_id ) );
+				$response[] = array(
+					'notification_id' => $notification_id,
+					'status'          => 'failure',
+					'failure_reason'  => __( 'Order ID is not numeric', 'woocommerce-shipstation-integration' ),
+				);
+				continue;
+			}
+
 			$order_ref = '';
 			if ( isset( $notification['order_id'] ) ) {
 				$order_ref = (string) $notification['order_id'];

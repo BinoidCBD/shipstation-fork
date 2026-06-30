@@ -774,10 +774,15 @@ class WC_ShipStation_Integration extends WC_Integration {
 		$site_info['source_details']['status_mapping']      = self::$status_mapping;
 		$site_info['source_details']['status_mapping_mode'] = $this->get_option( 'status_mode', self::STATUS_MODE_API );
 
-		// Surface the incoming-shipment queue backlog so the 5–6 AM burst window
-		// can be monitored during the GH-9 rollout (no-op until the queue exists).
+		// Surface the incoming-shipment queue backlog so the 5–6 AM burst window can
+		// be monitored during the GH-9 rollout (no-op until the queue exists).
+		// `shipment_queue_failed` is the count of shipments that exhausted retries or
+		// were quarantined: since the queue ACKs ShipStation up front these no longer
+		// trigger a ShipStation retry, so a non-zero value is the signal that a
+		// shipment needs manual replay (GH-9 M2).
 		if ( class_exists( '\WooCommerce\Shipping\ShipStation\Shipment_Queue' ) ) {
-			$site_info['source_details']['shipment_queue_depth'] = \WooCommerce\Shipping\ShipStation\Shipment_Queue::depth();
+			$site_info['source_details']['shipment_queue_depth']  = \WooCommerce\Shipping\ShipStation\Shipment_Queue::depth();
+			$site_info['source_details']['shipment_queue_failed'] = \WooCommerce\Shipping\ShipStation\Shipment_Queue::failed_depth();
 		}
 
 		return $site_info;

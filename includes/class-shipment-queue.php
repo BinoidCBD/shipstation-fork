@@ -530,6 +530,30 @@ class Shipment_Queue {
 	}
 
 	/**
+	 * Count rows that exhausted their retries (or were quarantined) and are now
+	 * `failed`.
+	 *
+	 * Surfaced alongside depth() in diagnostics: because the queue ACKs ShipStation
+	 * on accept, a permanently-failed shipment no longer triggers a ShipStation
+	 * retry, so this count is the signal that a shipment needs manual attention. A
+	 * non-zero, growing value here is the alert to act on (GH-9 M2).
+	 *
+	 * @return int
+	 */
+	public static function failed_depth(): int {
+		global $wpdb;
+
+		$table = self::table_name();
+
+		return (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$table} WHERE status = %s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				self::STATUS_FAILED
+			)
+		);
+	}
+
+	/**
 	 * Wire the drain worker: register the action handler and (re)evaluate the
 	 * recurring schedule on init. Called once from {@see Main::init()}.
 	 *

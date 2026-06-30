@@ -206,8 +206,11 @@ class Shipment_Queue {
 	 *
 	 * The conditional UPDATE is the single-flight primitive: it stamps the rows
 	 * with this run's unique token under a row lock, so two overlapping workers
-	 * can never claim the same row. attempts is incremented here so a row that
-	 * repeatedly crashes a worker eventually exhausts its retries.
+	 * can never claim the same row. The attempt counter is NOT bumped here — it is
+	 * charged per row in begin_attempt() right before that row is processed — so a
+	 * row that triggers an uncatchable fatal accrues the attempt on its own and
+	 * reclaim_stale() can quarantine it without penalizing the rows queued behind
+	 * it in the same batch (GH-9 M1).
 	 *
 	 * @param int    $limit Max rows to claim.
 	 * @param string $token Unique per-run claim token.
@@ -223,7 +226,7 @@ class Shipment_Queue {
 		$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(
 				"UPDATE {$table}
-				SET status = %s, locked_by = %s, locked_at = %s, attempts = attempts + 1, updated_at = %s
+				SET status = %s, locked_by = %s, locked_at = %s, updated_at = %s
 				WHERE status = %s AND available_at <= %s
 				ORDER BY id ASC
 				LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -277,6 +280,33 @@ class Shipment_Queue {
 	}
 
 	/**
+	 * Charge an attempt against a single row, immediately before it is processed.
+	 *
+	 * Incrementing per row — rather than for the whole batch at claim time — is what
+	 * lets reclaim_stale() tell a poison row (which reaches the attempt cap on its
+	 * own because the worker keeps dying on it) apart from its innocent batch-mates,
+	 * whose counter is untouched until they are actually reached. A row that triggers
+	 * an *uncatchable* fatal (OOM, timeout) therefore still exhausts its retries and
+	 * is quarantined, instead of being reclaimed and re-run forever (GH-9 M1).
+	 *
+	 * @param int $id Row id.
+	 * @return void
+	 */
+	public static function begin_attempt( int $id ): void {
+		global $wpdb;
+
+		$table = self::table_name();
+
+		$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->prepare(
+				"UPDATE {$table} SET attempts = attempts + 1, updated_at = %s WHERE id = %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				current_time( 'mysql', true ),
+				$id
+			)
+		);
+	}
+
+	/**
 	 * Mark a claimed row processed.
 	 *
 	 * @param int $id Row id.
@@ -305,7 +335,7 @@ class Shipment_Queue {
 	 * — a permanently failed row is logged loudly rather than silently dropped.
 	 *
 	 * @param int    $id           Row id.
-	 * @param int    $attempts     Attempts already recorded (post-increment from claim).
+	 * @param int    $attempts     This row's attempt number (from begin_attempt()).
 	 * @param string $error        Failure message.
 	 * @param int    $max_attempts Attempt cap.
 	 *
@@ -388,24 +418,71 @@ class Shipment_Queue {
 	}
 
 	/**
-	 * Return rows stuck in `processing` (a worker died mid-batch) to `pending`.
+	 * Recover claims stuck in `processing` because a worker died mid-batch.
+	 *
+	 * Rows whose attempt count has already reached the cap are quarantined as
+	 * `failed` (and logged) rather than returned to `pending`: a stale claim at the
+	 * cap means the row kept killing the worker with an *uncatchable* fatal (OOM,
+	 * timeout) — fail() never runs for those, so without this they would be reclaimed
+	 * and re-run forever, blocking the rows queued behind them. Because the attempt
+	 * is charged per row in begin_attempt(), only the offending row reaches the cap;
+	 * its un-started batch-mates stay under it and are returned to `pending` for a
+	 * normal retry (GH-9 M1).
 	 *
 	 * @param int $older_than_seconds Reclaim claims older than this.
+	 * @param int $max_attempts       Attempt cap; rows at/over it are quarantined.
+	 *                                0 disables quarantine (reclaim only).
 	 *
-	 * @return int Rows reclaimed.
+	 * @return int Rows returned to `pending` (quarantined rows are not counted).
 	 */
-	public static function reclaim_stale( int $older_than_seconds ): int {
+	public static function reclaim_stale( int $older_than_seconds, int $max_attempts = 0 ): int {
 		global $wpdb;
 
 		$table  = self::table_name();
 		$cutoff = gmdate( 'Y-m-d H:i:s', time() - $older_than_seconds );
+		$now    = current_time( 'mysql', true );
+
+		// Quarantine first, so the requeue below only touches rows under the cap.
+		if ( $max_attempts > 0 ) {
+			$poisoned = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$wpdb->prepare(
+					"SELECT id, notification_id, order_ref, attempts FROM {$table}
+					WHERE status = %s AND locked_at IS NOT NULL AND locked_at < %s AND attempts >= %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+					self::STATUS_PROCESSING,
+					$cutoff,
+					$max_attempts
+				),
+				ARRAY_A
+			);
+
+			foreach ( (array) $poisoned as $poison ) {
+				$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+					$wpdb->prepare(
+						"UPDATE {$table} SET status = %s, locked_by = '', locked_at = NULL, last_error = %s, updated_at = %s WHERE id = %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+						self::STATUS_FAILED,
+						'Quarantined after a stale claim reached the attempt cap (likely a fatal — memory/timeout — while processing).',
+						$now,
+						(int) $poison['id']
+					)
+				);
+
+				Logger::error(
+					sprintf(
+						'ShipStation shipment-queue: notification %s (order %s) quarantined as failed after %d attempts — a claim went stale at the attempt cap, which usually means a fatal (memory/timeout) while processing it. Needs manual replay.',
+						(string) $poison['notification_id'],
+						(string) $poison['order_ref'],
+						(int) $poison['attempts']
+					)
+				);
+			}
+		}
 
 		return (int) $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(
 				"UPDATE {$table} SET status = %s, locked_by = '', locked_at = NULL, updated_at = %s
 				WHERE status = %s AND locked_at IS NOT NULL AND locked_at < %s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				self::STATUS_PENDING,
-				current_time( 'mysql', true ),
+				$now,
 				self::STATUS_PROCESSING,
 				$cutoff
 			)
@@ -533,10 +610,14 @@ class Shipment_Queue {
 			return;
 		}
 
-		self::reclaim_stale( max( 60, (int) apply_filters( 'wc_shipstation_shipment_queue_stale_seconds', 5 * MINUTE_IN_SECONDS ) ) );
-
 		$batch_size   = max( 1, (int) apply_filters( 'wc_shipstation_shipment_queue_batch_size', 25 ) );
 		$max_attempts = max( 1, (int) apply_filters( 'wc_shipstation_shipment_queue_max_attempts', 5 ) );
+
+		// Recover crashed claims before taking a new batch. Rows that already reached
+		// the attempt cap from a prior uncatchable fatal are quarantined as failed
+		// here (fail() never ran for them), so a poison row cannot loop forever or
+		// block the rows behind it (GH-9 M1).
+		self::reclaim_stale( max( 60, (int) apply_filters( 'wc_shipstation_shipment_queue_stale_seconds', 5 * MINUTE_IN_SECONDS ) ), $max_attempts );
 
 		$token = wp_generate_uuid4();
 		$rows  = self::claim_batch( $batch_size, $token );
@@ -561,11 +642,17 @@ class Shipment_Queue {
 			self::heartbeat( $token );
 
 			$id           = (int) $row['id'];
-			$attempts     = (int) $row['attempts'];
+			$attempt_no   = (int) $row['attempts'] + 1;
 			$notification = json_decode( (string) $row['payload'], true );
 
+			// Charge the attempt to THIS row before we touch it, so an uncatchable
+			// fatal during processing is attributable to this row alone — its
+			// un-started batch-mates keep their lower count and are not quarantined
+			// alongside it when reclaim_stale() runs (GH-9 M1).
+			self::begin_attempt( $id );
+
 			if ( ! is_array( $notification ) ) {
-				self::fail( $row, $attempts, 'Unreadable payload JSON', $max_attempts );
+				self::fail( $row, $attempt_no, 'Unreadable payload JSON', $max_attempts );
 				continue;
 			}
 
@@ -584,12 +671,12 @@ class Shipment_Queue {
 				// dropping them here would lose the shipment.
 				if ( is_array( $result ) && isset( $result['status'] ) && 'failure' === $result['status'] ) {
 					$reason = isset( $result['failure_reason'] ) ? (string) $result['failure_reason'] : 'Processing failed';
-					self::fail( $row, $attempts, $reason, $max_attempts );
+					self::fail( $row, $attempt_no, $reason, $max_attempts );
 				} else {
 					self::mark_done( $id );
 				}
 			} catch ( \Throwable $e ) {
-				self::fail( $row, $attempts, $e->getMessage(), $max_attempts );
+				self::fail( $row, $attempt_no, $e->getMessage(), $max_attempts );
 			}
 		}
 

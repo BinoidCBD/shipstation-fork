@@ -25,6 +25,14 @@ if ( ! file_exists( "{$_tests_dir}/includes/functions.php" ) ) {
 	exit( 1 );
 }
 
+// Point the WP test suite at the PHPUnit Polyfills. They live outside this plugin
+// (the production vendor/ is committed and must not be overwritten by dev deps),
+// so pass their location via WP_TESTS_PHPUNIT_POLYFILLS_PATH. See tests/README.md.
+$_polyfills = getenv( 'WP_TESTS_PHPUNIT_POLYFILLS_PATH' );
+if ( $_polyfills && ! defined( 'WP_TESTS_PHPUNIT_POLYFILLS_PATH' ) ) {
+	define( 'WP_TESTS_PHPUNIT_POLYFILLS_PATH', $_polyfills );
+}
+
 require_once "{$_tests_dir}/includes/functions.php";
 
 /**

@@ -9,9 +9,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound -- Cross-plugin shared helper; sister Woo shipping plugins (woocommerce-shipping-usps, woocommerce-shipping-ups, etc.) define the same class. The class_exists() guard at class-wc-shipstation-api-shipnotify.php:60 dedupes when multiple are active.
 /**
  * Drop in replacement for DOMDocument that is secure against XML eXternal Entity (XXE) Injection.
- * Bails if any DOCTYPE is found
+ * Bails if any DOCTYPE is found.
  *
  * Comments in quotes come from the DOMDocument documentation: http://php.net/manual/en/class.domdocument.php
  */
@@ -104,3 +105,4 @@ class WC_Safe_DOMDocument extends DOMDocument {
 		return $return;
 	}
 }
+// phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound

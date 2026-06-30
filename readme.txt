@@ -1,13 +1,13 @@
 === ShipStation for WooCommerce ===
 Contributors: woocommerce, automattic, royho, akeda, mattyza, bor0, woothemes, dwainm, laurendavissmith001, Kloon
 Tags: shipping, woocommerce, automattic
-Requires at least: 6.8
-Tested up to: 6.9
-WC tested up to: 10.6
-WC requires at least: 10.4
+Requires at least: 6.9
+Tested up to: 7.0
+WC tested up to: 10.9
+WC requires at least: 10.7
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 4.9.8
+Stable tag: 5.2.0-forked-customized
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -73,6 +73,63 @@ This commonly occurs when products and variations do not have a unique [stock-ke
 6. Manage every order from one dashboard, with a single login.
 
 == Changelog ==
+
+= 5.2.0 - 2026-06-25 =
+* Add   - A settings toggle to enable the WordPress.com transport, no developer feature flag required.
+* Add   - Manage credentials, monitor connection health, and troubleshoot issues from a new connection section on the ShipStation settings tab.
+* Fix   - Restore ShipStation shipment notifications for orders containing a Product Bundle that was changed from Assembled to Unassembled after purchase.
+
+= 5.1.1 - 2026-06-22 =
+* Tweak - WooCommerce 10.9 Compatibility.
+
+= 5.1.0 - 2026-06-15 =
+* Add   - GET /orders now accepts order_ids[] to fetch specific orders by ID, bypassing the status filter and pagination.
+* Fix   - Diagnostics endpoint caused excessive database queries on high-traffic sites; now reads environment data directly from PHP/WC/WP constants with a 5-minute transient cache.
+
+= 5.0.9 - 2026-06-01 =
+* Fix   - REST shipnotify: fire the legacy API action so third-party compatibility modules (e.g. WooCommerce Composite Products, Product Bundles) that register item-filtering hooks on `woocommerce_api_wc_shipstation` are active when shippable item counts are calculated.
+* Fix   - Export orders whose WooCommerce status has no ShipStation mapping as "OnHold" instead of the invalid "Unknown" value that made ShipStation reject the entire REST import batch. "OnHold" holds the order for review rather than auto-shipping a status whose meaning is unknown.
+* Fix   - WPCOM transport: only enforce the strict ShipStation Basic Auth gate on `/wc-shipstation/v1/*` requests relayed through the WordPress.com proxy (identified by the `X-ShipStation-Authorization` header). Direct REST calls now defer to WooCommerce core authentication, restoring the query-string consumer key/secret fallback that misconfigured hosts (CGI/FastCGI, header-stripping WAFs) rely on when the transport flag is enabled.
+
+= 5.0.8 - 2026-05-25 =
+* Fix   - Harden REST API key handling: prevent duplicate key rows on Connection Details dialog open (most visible on Multisite), tag plugin-generated keys with `ck_wcss_` / `cs_wcss_`, and show the truncated key in the dialog.
+* Fix   - Preserve custom order statuses across status-mapping syncs when Status Mapping Mode is "ShipStation".
+* Fix   - In "Plugin" Status Mapping Mode, ignore the `status_mapping` query parameter on `/wc-shipstation/v1/orders` so the merchant's export-statuses list (including custom statuses) is the source of truth and orders with merchant-added statuses are no longer dropped on export.
+* Tweak - Status Mapping Mode: rename the "API" option to "ShipStation" and clarify the description; the mapping fields are disabled when "ShipStation" is selected.
+
+= 5.0.7 - 2026-05-20 =
+* Tweak - WordPress 7.0 Compatibility.
+
+= 5.0.6 - 2026-05-18 =
+* Fix   - Restore tracking updates from ShipStation when the original items have been replaced before shipping.
+* Tweak - WooCommerce 10.8 Compatibility.
+
+= 5.0.5 - 2026-05-11 =
+* Add   - When the WPCOM transport flag is on, the `/wc-shipstation/v1/*` REST namespace requires a WooCommerce Basic Auth credential that matches a row in `woocommerce_api_keys` on every request. Other authentication paths (App Passwords, cookies, Jetpack-signed requests on their own) cannot reach these routes. The lookup is by hashed `consumer_key` against the table, so installs that issued a ShipStation key before the auth modal landed continue to authenticate. With the flag off, the existing `wc_shipstation_user_can_manage_wc` filter remains the sole authority and behaviour matches previous releases.
+* Add   - Auth modal now surfaces the WPCOM proxy URL (`https://public-api.wordpress.com/wpcom/v2/sites/{blog_id}/shipstation`) as the "Site URL" when the WPCOM transport flag is on AND the site is Jetpack-connected, so ShipStation routes traffic through WordPress.com instead of the merchant URL.
+
+= 5.0.4 - 2026-05-05 =
+* Fix   - Prevent the "exported to ShipStation" marker from bumping the order's modified date, so ShipStation's incremental `modified_after` polls no longer re-fetch orders it already received.
+* Tweak - Enhance REST-API `/orders` endpoint performance.
+
+= 5.0.3 - 2026-04-27 =
+* Add   - Experimental WPCOM-brokered transport scaffolding (behind the `WC_SHIPSTATION_WPCOM_TRANSPORT` feature flag). Adds a "WordPress.com Connection" settings section that lets stores connect to WordPress.com via the Jetpack Connection package. No traffic is routed over the new channel yet.
+* Fix   - Avoid fatal error in REST shipnotify when an order line item references a deleted product.
+* Fix   - Enable WooCommerce consumer key/secret authentication for REST API requests made via the `?rest_route=` query parameter (plain permalink fallback).
+
+= 5.0.2 - 2026-04-17 =
+* Fix   - Decode HTML entities in order customer notes, internal notes, and gift messages before export so special characters (e.g. &, £, ') appear correctly in ShipStation rather than as HTML entities.
+* Fix   - Separate customer-facing order notes from internal notes in the REST API response so notes added for the buyer are exported as `NotesToBuyer` instead of being mixed into `InternalNotes`.
+* Fix   - Fall back to user account and shipping details for buyer name, email, and phone when billing fields are not populated.
+
+= 5.0.1 - 2026-04-15 =
+* Fix   - Assign REST API credentials to the site's first administrator to prevent `rest_forbidden` errors when key generation is triggered by a shop manager or other non-administrator account.
+
+= 5.0.0 - 2026-04-13 =
+* Add   - `returns` field to the REST API order response to expose refund and return data, enabling ShipStation to detect fully refunded/cancelled orders and update their status accordingly.
+* Fix   - Orders with fractional item quantities (e.g. 0.375 yards of fabric) now export correctly to ShipStation, with the original amount visible in the product details panel.
+* Fix   - Use the order's billing name and email for buyer details in the REST API response so ShipStation reflects the actual order contact rather than the linked customer account profile.
+* Tweak - WooCommerce 10.7 Compatibility.
 
 = 4.9.8 - 2026-03-23 =
 * Fix   - Decode HTML entities in item option names and values before export to prevent special characters (e.g. & and £) from appearing as HTML entities on ShipStation packing slips.

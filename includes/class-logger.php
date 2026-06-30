@@ -50,7 +50,9 @@ class Logger {
 		if ( is_null( self::$logger ) ) {
 			self::$logger = wc_get_logger();
 
-			self::$is_debug_enabled = WC_ShipStation_Integration::$logging_enabled;
+			self::$is_debug_enabled = class_exists( 'WC_ShipStation_Integration' )
+				? WC_ShipStation_Integration::$logging_enabled
+				: false;
 		}
 	}
 
@@ -83,6 +85,37 @@ class Logger {
 		}
 
 		self::$logger->debug( $message, self::get_merged_data( $data ) );
+	}
+
+	/**
+	 * Add an info log entry. Always logged, regardless of the debug-logging setting.
+	 *
+	 * @param string $message Message to log.
+	 * @param array  $data    Additional contextual data (e.g., array( 'source' => 'shipstation' ) ).
+	 *
+	 * @return void
+	 */
+	public static function info( string $message, array $data = array() ): void {
+		self::init();
+
+		self::$logger->info( $message, self::get_merged_data( $data ) );
+	}
+
+	/**
+	 * Add a warning log entry. Always logged, regardless of the debug-logging setting.
+	 *
+	 * Use for non-error conditions the merchant should see — e.g. a fallback being
+	 * triggered because the primary input was invalid.
+	 *
+	 * @param string $message Message to log.
+	 * @param array  $data    Additional contextual data (e.g., array( 'source' => 'shipstation' ) ).
+	 *
+	 * @return void
+	 */
+	public static function warning( string $message, array $data = array() ): void {
+		self::init();
+
+		self::$logger->warning( $message, self::get_merged_data( $data ) );
 	}
 
 	/**

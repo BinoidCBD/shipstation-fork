@@ -12,6 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use WC_Product;
+use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
 use Automattic\WooCommerce\Enums\ProductType;
@@ -133,35 +134,23 @@ class Inventory_Controller extends API_Controller {
 	}
 
 	/**
-	 * REST API permission callback.
+	 * REST API permission callback for GET /inventory* routes.
 	 *
-	 * @return boolean
+	 * @param WP_REST_Request $request Current REST request.
+	 * @return bool|WP_Error See API_Controller::check_namespace_permission().
 	 */
-	public function check_get_permission(): bool {
-		/**
-		 * Filters whether the current user has permissions to manage WooCommerce.
-		 *
-		 * @since 1.0.0
-		 *
-		 * @param bool $can_manage_wc Whether the user can manage WooCommerce.
-		 */
-		return apply_filters( 'wc_shipstation_user_can_manage_wc', wc_rest_check_manager_permissions( 'attributes', 'read' ) );
+	public function check_get_permission( WP_REST_Request $request ) {
+		return $this->check_namespace_permission( $request, 'attributes', 'read' );
 	}
 
 	/**
-	 * REST API permission callback.
+	 * REST API permission callback for POST /inventory/update.
 	 *
-	 * @return boolean
+	 * @param WP_REST_Request $request Current REST request.
+	 * @return bool|WP_Error See API_Controller::check_namespace_permission().
 	 */
-	public function check_update_permission(): bool {
-		/**
-		 * Filters whether the current user has permissions to manage WooCommerce.
-		 *
-		 * @since 1.0.0
-		 *
-		 * @param bool $can_manage_wc Whether the user can manage WooCommerce.
-		 */
-		return apply_filters( 'wc_shipstation_user_can_manage_wc', wc_rest_check_manager_permissions( 'attributes', 'create' ) );
+	public function check_update_permission( WP_REST_Request $request ) {
+		return $this->check_namespace_permission( $request, 'attributes', 'create' );
 	}
 
 	/**

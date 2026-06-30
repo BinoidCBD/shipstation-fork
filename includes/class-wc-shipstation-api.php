@@ -37,14 +37,17 @@ class WC_Shipstation_API extends WC_Shipstation_API_Request {
 		nocache_headers();
 
 		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- WP / WP-Engine cache-bypass contract; intentional per AGENTS.md.
 			define( 'DONOTCACHEPAGE', 'true' );
 		}
 
 		if ( ! defined( 'DONOTCACHEOBJECT' ) ) {
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- WP / WP-Engine cache-bypass contract; intentional per AGENTS.md.
 			define( 'DONOTCACHEOBJECT', 'true' );
 		}
 
 		if ( ! defined( 'DONOTCACHEDB' ) ) {
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- WP / WP-Engine cache-bypass contract; intentional per AGENTS.md.
 			define( 'DONOTCACHEDB', 'true' );
 		}
 

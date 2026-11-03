@@ -21,4 +21,38 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @since 5.0.9
  */
 class Checkout_Rates_Invalid_Payload_Exception extends \Exception {
+
+	/**
+	 * Whether the only problem is that the shopper has not entered a full address yet.
+	 *
+	 * @var bool
+	 */
+	private $incomplete_address = false;
+
+	/**
+	 * Create an exception for an address the shopper has not finished entering.
+	 *
+	 * @since 5.4.0
+	 *
+	 * @param string $message Exception message.
+	 *
+	 * @return self
+	 */
+	public static function incomplete_address( string $message ): self {
+		$exception                     = new self( $message );
+		$exception->incomplete_address = true;
+
+		return $exception;
+	}
+
+	/**
+	 * Whether the only problem is that the shopper has not entered a full address yet.
+	 *
+	 * @since 5.4.0
+	 *
+	 * @return bool
+	 */
+	public function is_incomplete_address(): bool {
+		return $this->incomplete_address;
+	}
 }

@@ -1,5 +1,57 @@
 *** ShipStation for WooCommerce ***
 
+= 5.4.0 - 2026-10-14 =
+* Fix   - Request ShipStation rates as soon as the customer has entered a country and ZIP code, instead of waiting for a city, and stop logging errors while the address is still incomplete.
+
+= 5.3.9 - 2026-10-07 =
+* Add   - Filter woocommerce_shipstation_checkout_rates_is_checkout_context, which lets other checkout requests receive ShipStation rates.
+* Fix   - Return ShipStation checkout rates in WooCommerce PayPal Payments checkout requests, where paying could fail with "No shipping method has been selected".
+* Fix   - Keep the shipping rate the customer chose when ShipStation quotes the rates again during checkout, including when the services come back in a different order, instead of switching the order to the first rate.
+* Fix   - Clear an incomplete refund list from the object cache after an orders export or shipment notification skips a refund it cannot read.
+
+= 5.3.8 - 2026-10-01 =
+* Tweak - WooCommerce 11.2 Compatibility.
+* Tweak - Include composer.json in the plugin package.
+* Tweak - Sanitize the export and shipment notification request values with sanitize_text_field(), and bind the order IDs in the order items cache warm.
+
+= 5.3.7 - 2026-09-22 =
+* Fix   - Stop a ShipStation status mapping that matches none of the enabled export statuses from exporting every order on stores using the older post-based order storage. Export settings with no usable order status now return an empty page on both order storages, with a warning in the ShipStation log, instead of the whole store. An enabled export status that is no longer registered on the store is now left out of both exports with a warning in the ShipStation log, where the XML export on high-performance order storage used to include its orders.
+
+= 5.3.6 - 2026-09-16 =
+* Tweak - Update the Jetpack Connection package to 9.1.2.
+
+= 5.3.5 - 2026-09-03 =
+* Fix   - Return a logged error when the orders export fails instead of failing silently, stop counting refunds as orders in the export page totals, and log a warning when ShipStation requests only statuses that are not enabled for export.
+* Fix   - Stop another plugin's output during an orders export from reaching ShipStation as a valid-looking response. The output is kept out of the export, ShipStation receives an error it will retry, and the discarded output is written to the ShipStation log so the plugin responsible can be identified.
+* Fix   - Stop another plugin's error while adding the "Order has been exported to Shipstation" order note from costing the rest of the export batch its notes. The failure is logged with the file and line that caused it.
+* Fix   - Stop another plugin's replacement WooCommerce logger from breaking a ShipStation request. A logger that prints or errors while ShipStation writes to the log can no longer reach the response or end the request, and a custom logger no longer causes a fatal error.
+* Fix   - Stop subscriptions and other non-order records from taking up room on the export page. On stores running WooCommerce Subscriptions, subscriptions on hold or cancelled counted toward the page size and the reported total, so a page could deliver far fewer orders than ShipStation asked for.
+* Tweak - Log entries carrying another plugin's error text are now written as a single entry, so a line break in that text can no longer appear as a separate log line.
+* Tweak - When an export page carries fewer orders than the store found, the ShipStation log now says so once for the page, naming how many were skipped and why, instead of one entry per order.
+* Tweak - WooCommerce 11.1 Compatibility.
+
+= 5.3.4 - 2026-08-24 =
+* Fix   - Stop a corrupted refund record from failing the whole orders export (REST and XML). An unreadable refund is logged and skipped: its order exports without that refund's data (so its item quantities and returns will not reflect the skipped refund) and the rest of the page is unaffected. Shipment notifications count shipped items from the readable refunds; an unreadable refund's quantity is still missing until the record is repaired.
+* Tweak - WordPress 7.1 Compatibility.
+
+= 5.3.3 - 2026-08-17 =
+* Fix   - Stop another plugin's error on the order note, or on its customer email, from failing the whole shipment notification. The shipment is still recorded, and the error is written to the ShipStation log with the file and line that caused it. Note that woocommerce_shipstation_shipnotify_status_updated now fires only when the order actually reached the shipped status.
+* Fix   - Complete the order after a shipment notification even when another plugin's error interrupts a write to the order. On stores using the older post-based order storage this could previously leave the order in its old status, with the shipment recorded but never marked complete.
+* Tweak - On WooCommerce 10.8 and above, send the emails a shipment notification triggers in the background rather than during the request, so a slow or memory-heavy email template can no longer fail it. Use the new woocommerce_shipstation_defer_shipment_emails filter to send them inline again.
+* Fix   - Stop the connection list reporting a ShipStation route as Active while its requests were in fact being rejected. A connection is now recorded only once a request has authenticated.
+
+= 5.3.2 - 2026-08-10 =
+* Fix   - Bound the order notes fetched per order during export, so a large note history can no longer exhaust PHP memory. Exports now send each order's most recent notes, up to 50 internal and 50 customer notes per order, instead of loading every note on the page.
+
+= 5.3.1 - 2026-07-27 =
+* Fix   - Stop duplicate "exported to Shipstation" order notes on stores with a persistent object cache and HPOS.
+* Tweak - WooCommerce 11.0 Compatibility.
+* Fix   - Prevent duplicate shipment tracking notes and an inflated shipped-item count when ShipStation retries a shipment notification for the same order. Note that the woocommerce_shipstation_shipnotify_send_tracking_note filter no longer runs on a duplicate retry.
+
+= 5.3.0 - 2026-07-15 =
+* Add   - Checkout Rates: merchants can now enable ShipStation live shipping rates at checkout from the ShipStation integration settings; defaults to off and requires ShipStation provisioning before it can be activated.
+* Fix   - Prevent a fatal error on WooCommerce versions older than the plugin's supported minimum that could take the whole site down; ShipStation now falls back to built-in order-status and product-type values instead of failing to load.
+
 = 5.2.0 - 2026-06-25 =
 * Add   - A settings toggle to enable the WordPress.com transport, no developer feature flag required.
 * Add   - Manage credentials, monitor connection health, and troubleshoot issues from a new connection section on the ShipStation settings tab.

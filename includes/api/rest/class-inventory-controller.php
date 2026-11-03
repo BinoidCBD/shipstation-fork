@@ -15,7 +15,7 @@ use WC_Product;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
-use Automattic\WooCommerce\Enums\ProductType;
+use WooCommerce\Shipping\ShipStation\Enum_Helper;
 use WP_REST_Server;
 
 /**
@@ -262,7 +262,7 @@ class Inventory_Controller extends API_Controller {
 		$per_page = intval( $request_params['per_page'] ); // Default to 100 items per page.
 
 		$args = array(
-			'type'     => array( ProductType::SIMPLE, ProductType::VARIABLE, ProductType::GROUPED, ProductType::EXTERNAL, ProductType::VARIATION ),
+			'type'     => array( Enum_Helper::product_simple(), Enum_Helper::product_variable(), Enum_Helper::product_grouped(), Enum_Helper::product_external(), Enum_Helper::product_variation() ),
 			'limit'    => $per_page,
 			'page'     => $page,
 			'paginate' => true,

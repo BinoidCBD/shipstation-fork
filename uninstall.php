@@ -33,7 +33,7 @@ function woocommerce_shipstation_uninstall_cleanup() {
 	global $wpdb;
 
 	$table = $wpdb->prefix . 'wc_shipstation_connections';
-	$wpdb->query( "DROP TABLE IF EXISTS `{$table}`" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	$wpdb->query( "DROP TABLE IF EXISTS `{$table}`" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- Drops this plugin's own table on uninstall; a table name cannot be bound, and the name is the prefix plus a literal.
 
 	$options = array(
 		'woocommerce_shipstation_connlog_db_version',

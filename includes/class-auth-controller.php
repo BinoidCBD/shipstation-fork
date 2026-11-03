@@ -410,6 +410,7 @@ class Auth_Controller {
 			'truncated_key'   => substr( $consumer_key, -7 ),
 		);
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Inserts into WooCommerce's API keys table, which has no CRUD API. A write has nothing to cache.
 		$result = $wpdb->insert(
 			$table_name,
 			$data,

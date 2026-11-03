@@ -215,7 +215,8 @@ final class Checkout_Rates_Api_Client implements Checkout_Rates_Api_Client_Inter
 	 */
 	private static function redact_payload_for_log( array $payload ): array {
 		// Destination keeps only country/postal_code/province/city/address_type;
-		// line items keep weight/quantity/sku but lose names.
+		// line items keep weight/quantity/sku but lose names, and descriptions
+		// become their length.
 		if ( ! isset( $payload['rate'] ) || ! is_array( $payload['rate'] ) ) {
 			return $payload;
 		}
@@ -240,6 +241,11 @@ final class Checkout_Rates_Api_Client implements Checkout_Rates_Api_Client_Inter
 						return $item;
 					}
 					unset( $item['name'] );
+					if ( isset( $item['description'] ) ) {
+						$item['description'] = is_string( $item['description'] )
+							? sprintf( '<redacted %d chars>', mb_strlen( $item['description'], 'UTF-8' ) )
+							: '<redacted>';
+					}
 					return $item;
 				},
 				$rate['items']

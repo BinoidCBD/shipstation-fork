@@ -7,7 +7,7 @@
 
 // phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- File is included inside WC_ShipStation_Integration::init_form_fields() (see class-wc-shipstation-integration.php:467); these variables are method-scoped at runtime, not globals.
 
-use Automattic\WooCommerce\Enums\OrderInternalStatus;
+use WooCommerce\Shipping\ShipStation\Enum_Helper;
 use WooCommerce\Shipping\ShipStation\Order_Util;
 use WooCommerce\Shipping\ShipStation\Checkout\Checkout_Rates_Options;
 
@@ -36,7 +36,7 @@ $fields = array(
 		'options'     => $statuses,
 		'description' => __( 'Define the order status you wish to update to once an order has been shipping via ShipStation. By default this is "Completed".', 'woocommerce-shipstation-integration' ),
 		'desc_tip'    => true,
-		'default'     => OrderInternalStatus::COMPLETED,
+		'default'     => Enum_Helper::internal_completed(),
 	),
 	'api_mode'                                             => array(
 		'title'             => __( 'API Mode', 'woocommerce-shipstation-integration' ),
@@ -73,7 +73,7 @@ $fields = array(
 		'options'     => $statuses,
 		'description' => __( 'Define the order status you wish to map for ShipStation "AwaitingPayment" status. By default this is "pending".', 'woocommerce-shipstation-integration' ),
 		'desc_tip'    => true,
-		'default'     => array( OrderInternalStatus::PENDING ),
+		'default'     => array( Enum_Helper::internal_pending() ),
 	),
 	WC_ShipStation_Integration::AWAITING_SHIPMENT_STATUS . '_status' => array(
 		'title'       => __( 'Awaiting Shipment', 'woocommerce-shipstation-integration' ),
@@ -82,7 +82,7 @@ $fields = array(
 		'options'     => $statuses,
 		'description' => __( 'Define the order status you wish to map for ShipStation "AwaitingShipment" status. By default this is "processing".', 'woocommerce-shipstation-integration' ),
 		'desc_tip'    => true,
-		'default'     => array( OrderInternalStatus::PROCESSING ),
+		'default'     => array( Enum_Helper::internal_processing() ),
 	),
 	WC_ShipStation_Integration::ON_HOLD_STATUS . '_status' => array(
 		'title'       => __( 'OnHold', 'woocommerce-shipstation-integration' ),
@@ -91,7 +91,7 @@ $fields = array(
 		'options'     => $statuses,
 		'description' => __( 'Define the order status you wish to map for ShipStation "OnHold" status. By default this is "on-hold".', 'woocommerce-shipstation-integration' ),
 		'desc_tip'    => true,
-		'default'     => array( OrderInternalStatus::ON_HOLD ),
+		'default'     => array( Enum_Helper::internal_on_hold() ),
 	),
 	WC_ShipStation_Integration::COMPLETED_STATUS . '_status' => array(
 		'title'       => __( 'Completed', 'woocommerce-shipstation-integration' ),
@@ -100,7 +100,7 @@ $fields = array(
 		'options'     => $statuses,
 		'description' => __( 'Define the order status you wish to map for ShipStation "Completed" status. By default this is "completed".', 'woocommerce-shipstation-integration' ),
 		'desc_tip'    => true,
-		'default'     => array( OrderInternalStatus::COMPLETED ),
+		'default'     => array( Enum_Helper::internal_completed() ),
 	),
 	WC_ShipStation_Integration::CANCELLED_STATUS . '_status' => array(
 		'title'       => __( 'Cancelled', 'woocommerce-shipstation-integration' ),
@@ -109,7 +109,7 @@ $fields = array(
 		'options'     => $statuses,
 		'description' => __( 'Define the order status you wish to map for ShipStation "Cancelled" status. By default this is "cancelled".', 'woocommerce-shipstation-integration' ),
 		'desc_tip'    => true,
-		'default'     => array( OrderInternalStatus::CANCELLED, OrderInternalStatus::REFUNDED ),
+		'default'     => array( Enum_Helper::internal_cancelled(), Enum_Helper::internal_refunded() ),
 	),
 	'gift_enabled'                                         => array(
 		'title'       => __( 'Gift', 'woocommerce-shipstation-integration' ),
@@ -135,6 +135,21 @@ if ( Checkout_Rates_Options::should_render_settings_section() ) {
 		'type'        => 'title',
 		'description' => Checkout_Rates_Options::get_settings_description_html(),
 	);
+
+	$checkout_rates_enabled_field = array(
+		'title'       => __( 'Enable rates', 'woocommerce-shipstation-integration' ),
+		'label'       => __( 'Enable Checkout Rates at checkout', 'woocommerce-shipstation-integration' ),
+		'type'        => 'checkbox',
+		'default'     => 'no',
+		'desc_tip'    => false,
+		'description' => __( 'When enabled, ShipStation live rates will be available as a shipping option at checkout.', 'woocommerce-shipstation-integration' ),
+	);
+
+	if ( ! Checkout_Rates_Options::is_configured() ) {
+		$checkout_rates_enabled_field['custom_attributes'] = array( 'disabled' => 'disabled' );
+	}
+
+	$fields[ Checkout_Rates_Options::OPTION_ENABLED ] = $checkout_rates_enabled_field;
 }
 
 // Save-bearing WordPress.com transport opt-in (SHIPSTN-133). Ticking it enables

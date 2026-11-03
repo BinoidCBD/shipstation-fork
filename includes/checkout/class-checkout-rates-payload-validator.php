@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Runs after all five public checkout-rates filters have applied. Logs each violation
  * with field- and filter-level context, then throws Checkout_Rates_Invalid_Payload_Exception
  * so callers can skip the upstream API request rather than send a payload ShipStation
- * will reject.
+ * will reject. Address fields the shopper has not entered yet are logged at debug level.
  *
  * @since 5.0.9
  */
@@ -39,6 +39,11 @@ final class Checkout_Rates_Payload_Validator {
 		'pre_items'        => 'woocommerce_shipstation_checkout_rates_items',
 		'pre_request'      => 'woocommerce_shipstation_checkout_rates_request',
 	);
+
+	/**
+	 * Destination fields that come from what the shopper typed.
+	 */
+	private const SHOPPER_ADDRESS_FIELDS = array( 'country', 'postal_code' );
 
 	/**
 	 * Validate the final outbound payload.
@@ -64,21 +69,106 @@ final class Checkout_Rates_Payload_Validator {
 			return;
 		}
 
+		$errors         = array();
+		$missing_fields = array();
+
 		foreach ( $violations as $violation ) {
 			$filter = self::attribute_to_filter( $violation, $snapshots );
+
+			$field = null === $filter ? self::unentered_address_field( $violation, $payload, $snapshots ) : null;
+
+			if ( null !== $field ) {
+				$missing_fields[] = $field;
+				continue;
+			}
+
+			$errors[] = $violation;
 			self::log( $violation, $filter );
+		}
+
+		if ( ! empty( $missing_fields ) ) {
+			Logger::debug(
+				sprintf(
+					'ShipStation checkout rates: no rates requested, the shipping address has no %s yet.',
+					implode( ', ', $missing_fields )
+				),
+				array( 'fields' => $missing_fields )
+			);
+		}
+
+		if ( empty( $errors ) ) {
+			throw Checkout_Rates_Invalid_Payload_Exception::incomplete_address(
+				esc_html(
+					sprintf(
+						'ShipStation checkout rates payload is missing address fields the shopper has not entered yet (%s).',
+						implode( ', ', $missing_fields )
+					)
+				)
+			);
 		}
 
 		throw new Checkout_Rates_Invalid_Payload_Exception(
 			esc_html(
 				sprintf(
 					'ShipStation checkout rates payload failed validation (%d violation%s; first: %s).',
-					count( $violations ),
-					1 === count( $violations ) ? '' : 's',
-					$violations[0]['path']
+					count( $errors ),
+					1 === count( $errors ) ? '' : 's',
+					$errors[0]['path']
 				)
 			)
 		);
+	}
+
+	/**
+	 * The address field the shopper has not entered yet, for a violation.
+	 *
+	 * Only called for violations no filter introduced. Returns the field only when it
+	 * is empty now and was already empty before the filters ran.
+	 *
+	 * @param array $violation Violation entry.
+	 * @param array $payload   Final outbound payload.
+	 * @param array $snapshots Pre-filter snapshots.
+	 *
+	 * @return string|null Destination field name, or null when the violation is an error.
+	 */
+	private static function unentered_address_field( array $violation, array $payload, array $snapshots ): ?string {
+		$field = substr( $violation['path'], strlen( 'rate.destination.' ) );
+
+		if ( 0 !== strpos( $violation['path'], 'rate.destination.' )
+			|| ! in_array( $field, self::SHOPPER_ADDRESS_FIELDS, true )
+			|| ! is_array( $snapshots['pre_destination'] ?? null ) ) {
+			return null;
+		}
+
+		$before = $snapshots['pre_destination'][ $field ] ?? null;
+		$now    = $payload['rate']['destination'][ $field ] ?? null;
+
+		if ( 'postal_code' === $field && ! self::country_asks_for_postcode( $payload['rate']['destination']['country'] ?? '' ) ) {
+			return null;
+		}
+
+		return ( null === $before || '' === $before ) && ( null === $now || '' === $now ) ? $field : null;
+	}
+
+	/**
+	 * Whether the checkout asks the shopper for a postcode in this country.
+	 *
+	 * Where WooCommerce hides the postcode or makes it optional, an empty one is a
+	 * complete address that ShipStation cannot quote, not an address in progress.
+	 *
+	 * @param mixed $country Destination country code.
+	 *
+	 * @return bool
+	 */
+	private static function country_asks_for_postcode( $country ): bool {
+		if ( ! is_string( $country ) || '' === $country || ! function_exists( 'WC' ) || ! WC()->countries ) {
+			return true;
+		}
+
+		$locale   = WC()->countries->get_country_locale();
+		$postcode = $locale[ $country ]['postcode'] ?? array();
+
+		return empty( $postcode['hidden'] ) && false !== ( $postcode['required'] ?? true );
 	}
 
 	/**
@@ -137,7 +227,7 @@ final class Checkout_Rates_Payload_Validator {
 	 */
 	private static function check_destination( array $destination ): array {
 		$violations = array();
-		$required   = array( 'country', 'postal_code', 'city', 'address_type' );
+		$required   = array( 'country', 'postal_code', 'address_type' );
 
 		foreach ( $required as $field ) {
 			if ( ! isset( $destination[ $field ] ) || ! is_string( $destination[ $field ] ) || '' === $destination[ $field ] ) {
@@ -146,6 +236,14 @@ final class Checkout_Rates_Payload_Validator {
 					'message' => sprintf( 'rate.destination.%s is missing or not a non-empty string', $field ),
 				);
 			}
+		}
+
+		// ShipStation quotes without a city, so the key must be sent but may be empty.
+		if ( ! isset( $destination['city'] ) || ! is_string( $destination['city'] ) ) {
+			$violations[] = array(
+				'path'    => 'rate.destination.city',
+				'message' => 'rate.destination.city is missing or not a string',
+			);
 		}
 
 		return $violations;
@@ -282,7 +380,7 @@ final class Checkout_Rates_Payload_Validator {
 	 * Whether a destination snapshot is clean for a given destination-field path.
 	 *
 	 * @param array  $destination Destination array.
-	 * @param string $path        Violation path (e.g. "rate.destination.city").
+	 * @param string $path        Violation path (e.g. "rate.destination.country").
 	 *
 	 * @return bool
 	 */

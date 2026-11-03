@@ -16,6 +16,7 @@ use WooCommerce\Shipping\ShipStation\Connection_Log;
 use WooCommerce\Shipping\ShipStation\Features;
 use WooCommerce\Shipping\ShipStation\Logger;
 use WooCommerce\Shipping\ShipStation\Main;
+use WooCommerce\Shipping\ShipStation\Order_Util;
 use WP_Error;
 use WP_REST_Request;
 
@@ -57,7 +58,36 @@ class API_Controller {
 	 * @param string $message Log message.
 	 */
 	public function log( $message ) {
-		Logger::debug( $message );
+		self::log_contained( 'debug', (string) $message );
+	}
+
+	/**
+	 * Write to the log without letting the logger reach the response.
+	 *
+	 * Every write on this controller runs in a permission callback, which is
+	 * ahead of the export boundary. woocommerce_logging_class lets any plugin
+	 * replace the logger, so a handler that printed here put its output in
+	 * front of the payload and a handler that threw killed the request outright
+	 * - both the SHIPSTN-171 shape, from the code meant to report it.
+	 *
+	 * @since 5.3.5
+	 *
+	 * @param string $level   'debug' or 'error'.
+	 * @param string $message Log message.
+	 * @return void
+	 */
+	protected static function log_contained( string $level, string $message ): void {
+		Order_Util::log_isolated(
+			'the REST request log write',
+			static function () use ( $level, $message ) {
+				if ( 'error' === $level ) {
+					Logger::error( $message );
+					return;
+				}
+
+				Logger::debug( $message );
+			}
+		);
 	}
 
 	/**
@@ -86,6 +116,8 @@ class API_Controller {
 	 *
 	 * @since 5.0.5
 	 * @since 5.0.9 Strict gate scoped to proxied requests (relay header present).
+	 * @since 5.3.3 Success telemetry (connection rows, last_access, last-success)
+	 *              is written only after the capability layer allows the request.
 	 *
 	 * @param WP_REST_Request $request Current REST request.
 	 * @param string          $context wc_rest_check_manager_permissions context, e.g. 'attributes'.
@@ -110,7 +142,8 @@ class API_Controller {
 		// merchant reports "ShipStation can't connect" — it proves whether the
 		// request is even arriving, and over which transport. Debug-gated, so it
 		// only writes once the merchant enables logging to reproduce.
-		Logger::debug(
+		self::log_contained(
+			'debug',
 			sprintf(
 				'ShipStation REST request: route=%s method=%s transport=%s',
 				$request->get_route(),
@@ -119,14 +152,6 @@ class API_Controller {
 			)
 		);
 
-		if ( ! $is_proxied ) {
-			// Record every direct request for the key list's "Type" column and the
-			// connection log — independent of the transport toggle, since
-			// ShipStation connects directly with the REST keys whether or not the
-			// WordPress.com transport is enabled. Pure telemetry — WC core remains
-			// the auth authority on this path (SHIPSTN-132).
-			$this->record_direct_connection( $request );
-		}
 		if ( $is_proxied && ! Features::is_wpcom_transport_enabled() ) {
 			// Transport off: ShipStation is still reaching the WordPress.com proxy,
 			// but the store rejects it (the strict gate below does not run, so the
@@ -134,6 +159,7 @@ class API_Controller {
 			// shows the disabled, store-rejected route as live. Read-only telemetry.
 			$this->record_rejected_proxy_connection( $request );
 		}
+		$proxied_row = null;
 		if ( Features::is_wpcom_transport_enabled() && $is_proxied ) {
 			$row = $this->resolve_authenticated_api_key_row( $request );
 			if ( null === $row ) {
@@ -146,7 +172,7 @@ class API_Controller {
 			// cannot leak the request to a pre-existing user identity.
 			$user_id = (int) $row->user_id;
 			if ( $user_id <= 0 || ! get_userdata( $user_id ) ) {
-				Logger::debug( 'ShipStation Basic Auth rejected: api_key_owner_missing' );
+				self::log_contained( 'debug', 'ShipStation Basic Auth rejected: api_key_owner_missing' );
 				return $this->invalid_credentials_error();
 			}
 			if ( get_current_user_id() !== $user_id ) {
@@ -158,7 +184,8 @@ class API_Controller {
 			// so a support engineer can cross-reference without needing the
 			// plaintext key. Gated on the existing Logger flag — no cost when
 			// logging is disabled.
-			Logger::debug(
+			self::log_contained(
+				'debug',
 				sprintf(
 					'ShipStation Basic Auth accepted: key_id=%d truncated_key=%s',
 					(int) $row->key_id,
@@ -166,25 +193,10 @@ class API_Controller {
 				)
 			);
 
-			// Parity with WC_REST_Authentication, which stamps last_access on
-			// every direct authenticated request. WPCOM-set keys authenticate
-			// exclusively through this gate, so without the stamp the settings
-			// key list would report them as never used (SHIPSTN-142).
-			$this->update_api_key_last_access( (int) $row->key_id );
-
-			// Record the proxied connection (key list "Type" + connection log) and
-			// leave a diagnostic breadcrumb. Scoped to our own keys; telemetry only.
-			if ( Auth_Controller::is_plugin_secret( (string) $row->consumer_secret ) ) {
-				$proxy_url = $this->wpcom_proxy_url();
-				Connection_Log::record( (int) $row->key_id, (string) $row->truncated_key, 'wpcom', $proxy_url, home_url() );
-				$this->log_connection( 'wpcom', (int) $row->key_id, (string) $row->truncated_key, $proxy_url, $request );
-				// Latch a real, post-feature successful sync so the global broken-
-				// connection banner can tell "was working, now silent" from "never
-				// set up" (SHIPSTN-142). Proxied success — site A.
-				$this->stamp_last_success();
-			}
+			$proxied_row = $row;
 		}
 
+		// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Public hook name retained for backward compatibility.
 		/**
 		 * Filters whether the current user has permissions to manage WooCommerce
 		 * for ShipStation routes.
@@ -193,7 +205,30 @@ class API_Controller {
 		 *
 		 * @param bool $can_manage_wc Whether the user can manage WooCommerce.
 		 */
-		return apply_filters( 'wc_shipstation_user_can_manage_wc', wc_rest_check_manager_permissions( $context, $action ) );
+		$can_manage = apply_filters( 'wc_shipstation_user_can_manage_wc', wc_rest_check_manager_permissions( $context, $action ) );
+		// phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+
+		if ( ! $is_proxied ) {
+			// Telemetry only; WC core stays the auth authority here (SHIPSTN-132).
+			// Records nothing unless the request was served as the key owner.
+			$this->record_direct_connection( $request, true === $can_manage );
+		} elseif ( true === $can_manage && null !== $proxied_row ) {
+			// Success telemetry runs only for served requests (SHIPSTN-166). The
+			// last_access stamp keeps parity with WC_REST_Authentication so keys
+			// that authenticate only through this gate read as used (SHIPSTN-142).
+			$this->update_api_key_last_access( (int) $proxied_row->key_id );
+
+			if ( Auth_Controller::is_plugin_secret( (string) $proxied_row->consumer_secret ) ) {
+				// Record the proxied connection (key list "Type" + connection log)
+				// and latch the broken-connection banner's success epoch (site A).
+				$proxy_url = $this->wpcom_proxy_url();
+				Connection_Log::record( (int) $proxied_row->key_id, (string) $proxied_row->truncated_key, 'wpcom', $proxy_url, home_url() );
+				$this->log_connection( 'wpcom', (int) $proxied_row->key_id, (string) $proxied_row->truncated_key, $proxy_url, $request );
+				$this->stamp_last_success();
+			}
+		}
+
+		return $can_manage;
 	}
 
 	/**
@@ -246,19 +281,19 @@ class API_Controller {
 			(string) $request->get_header( 'x_shipstation_authorization' )
 		);
 		if ( '' === $consumer_key || '' === $consumer_secret ) {
-			Logger::debug( 'ShipStation Basic Auth rejected: malformed_authorization' );
+			self::log_contained( 'debug', 'ShipStation Basic Auth rejected: malformed_authorization' );
 			return null;
 		}
 
 		$hashed_key = wc_api_hash( $consumer_key );
 		$row        = $this->fetch_api_key_row_by_hash( $hashed_key );
 		if ( null === $row || empty( $row->consumer_secret ) ) {
-			Logger::debug( 'ShipStation Basic Auth rejected: consumer_key_mismatch' );
+			self::log_contained( 'debug', 'ShipStation Basic Auth rejected: consumer_key_mismatch' );
 			return null;
 		}
 
 		if ( ! hash_equals( (string) $row->consumer_secret, $consumer_secret ) ) {
-			Logger::debug( 'ShipStation Basic Auth rejected: consumer_secret_mismatch' );
+			self::log_contained( 'debug', 'ShipStation Basic Auth rejected: consumer_secret_mismatch' );
 			return null;
 		}
 
@@ -282,8 +317,7 @@ class API_Controller {
 		}
 
 		global $wpdb;
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- hash-equality lookup, no CRUD equivalent
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching -- result memoised in self::$api_key_row_cache for the request lifetime
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Hash-equality lookup against WooCommerce's API keys table, which has no CRUD equivalent; the result is memoised in self::$api_key_row_cache for the request lifetime.
 		$row = $wpdb->get_row(
 			$wpdb->prepare(
 				"SELECT key_id, user_id, consumer_key, consumer_secret, truncated_key FROM {$wpdb->prefix}woocommerce_api_keys WHERE consumer_key = %s",
@@ -326,7 +360,7 @@ class API_Controller {
 		if ( false === $updated ) {
 			// A swallowed failure here re-reports a live key as "never used" in the
 			// settings list (the exact bug SHIPSTN-142 fixes), so leave a breadcrumb.
-			Logger::error( 'Failed to stamp last_access on ShipStation API key row. DB error: ' . (string) $wpdb->last_error );
+			self::log_contained( 'error', 'Failed to stamp last_access on ShipStation API key row. DB error: ' . Order_Util::sanitize_for_log( (string) $wpdb->last_error ) );
 		}
 	}
 
@@ -340,13 +374,19 @@ class API_Controller {
 	 * plugin-prefixed row is ignored. The connection log throttles repeat writes,
 	 * so a steadily polling store adds no per-request overhead beyond one lookup.
 	 *
+	 * Success telemetry only (SHIPSTN-166): records nothing unless the capability
+	 * layer served the request and it authenticated as the key's owner. A skipped
+	 * plugin-key request leaves a debug breadcrumb for support.
+	 *
 	 * @since 5.2.0
+	 * @since 5.3.3 Records only for served requests authenticated as the key owner.
 	 *
 	 * @param WP_REST_Request $request Current REST request.
+	 * @param bool            $served  Whether the capability layer allowed the request.
 	 *
 	 * @return void
 	 */
-	private function record_direct_connection( WP_REST_Request $request ): void {
+	private function record_direct_connection( WP_REST_Request $request, bool $served ): void {
 		$consumer_key = $this->read_direct_consumer_key( $request );
 		if ( '' === $consumer_key ) {
 			return;
@@ -361,16 +401,27 @@ class API_Controller {
 			return;
 		}
 
+		// Everything below records this route as live and working, so the request
+		// must have been served AND authenticated as this key's owner (WC core sets
+		// the current user upstream). Without this, a probe, or a store where
+		// is_ssl() is false so WC never checked the key, painted a green "Active"
+		// pill while every request returned 401 (SHIPSTN-166).
+		if ( ! $served || (int) $row->user_id <= 0 || get_current_user_id() !== (int) $row->user_id ) {
+			self::log_contained(
+				'debug',
+				sprintf(
+					'ShipStation direct request with plugin key_id=%d was rejected or not authenticated as the key owner; connection not recorded. If the credentials are valid, check for TLS terminated upstream (is_ssl() false).',
+					(int) $row->key_id
+				)
+			);
+			return;
+		}
+
 		// Stamp last_access so the key list's "Last seen" / Active state tracks
 		// direct syncs. WC core's WC_REST_Authentication does not stamp it on every
 		// ShipStation request form, so without this a steadily-polling direct store
-		// shows a live connection-log row while the key itself reads stale. Gated on
-		// the request actually authenticating as this key's owner (WC core set the
-		// current user upstream), so a probe that merely presents a known consumer
-		// key — without the matching secret — cannot keep the key "Active".
-		if ( (int) $row->user_id > 0 && get_current_user_id() === (int) $row->user_id ) {
-			$this->update_api_key_last_access( (int) $row->key_id );
-		}
+		// shows a live connection-log row while the key itself reads stale.
+		$this->update_api_key_last_access( (int) $row->key_id );
 
 		$url = home_url();
 		// For direct, the Store URL ShipStation hits IS the site URL, so the
@@ -490,7 +541,8 @@ class API_Controller {
 	 * @return void
 	 */
 	private function log_connection( string $transport, int $key_id, string $truncated_key, string $url, WP_REST_Request $request ): void {
-		Logger::debug(
+		self::log_contained(
+			'debug',
 			sprintf(
 				'ShipStation connection: transport=%s key_id=%d truncated_key=%s url=%s route=%s',
 				$transport,

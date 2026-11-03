@@ -9,6 +9,7 @@
 namespace WooCommerce\Shipping\ShipStation\Checkout;
 
 use WC_Product;
+use WooCommerce\Shipping\ShipStation\Features;
 use WooCommerce\Shipping\ShipStation\Logger;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -21,6 +22,15 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @since 4.9.8
  */
 final class Checkout_Rates_Request_Builder {
+
+	/**
+	 * Maximum length of an item description, in characters.
+	 *
+	 * @since 5.4.0
+	 *
+	 * @var int
+	 */
+	private const DESCRIPTION_MAX_LENGTH = 2000;
 
 	/**
 	 * Pre-filter payload snapshots captured during the current build() call.
@@ -167,9 +177,10 @@ final class Checkout_Rates_Request_Builder {
 		}
 
 		// Hoist store-wide values out of the loop — they don't vary per line item.
-		$weight_unit_raw = get_option( 'woocommerce_weight_unit' );
-		$currency        = get_woocommerce_currency();
-		$price_decimals  = wc_get_price_decimals();
+		$weight_unit_raw  = get_option( 'woocommerce_weight_unit' );
+		$currency         = get_woocommerce_currency();
+		$price_decimals   = wc_get_price_decimals();
+		$send_description = Features::is_gpdt_enabled();
 
 		$items          = array();
 		$pre_item_items = array();
@@ -243,6 +254,10 @@ final class Checkout_Rates_Request_Builder {
 				),
 			);
 
+			if ( $send_description ) {
+				$line_item['description'] = $this->build_item_description( $product );
+			}
+
 			$dimensions = $this->build_item_dimensions( $product );
 			if ( ! empty( $dimensions ) ) {
 				$line_item['dimensions'] = $dimensions;
@@ -275,6 +290,129 @@ final class Checkout_Rates_Request_Builder {
 		 * @param array $package The WooCommerce shipping package.
 		 */
 		return apply_filters( 'woocommerce_shipstation_checkout_rates_items', $items, $package );
+	}
+
+	/**
+	 * Build the plain-text item description for the rates request.
+	 *
+	 * Variation text comes first, then the parent's; the name is used when empty.
+	 *
+	 * @since 5.4.0
+	 *
+	 * @param WC_Product $product Product in the cart.
+	 *
+	 * @return string
+	 */
+	private function build_item_description( WC_Product $product ): string {
+		// Getters can be filtered to null, so cast before the string-typed cleaner.
+		$text = $this->clean_description( (string) $product->get_description() );
+
+		if ( $product->is_type( 'variation' ) ) {
+			$parent      = wc_get_product( $product->get_parent_id() );
+			$parent_text = $parent instanceof WC_Product ? $this->clean_description( (string) $parent->get_description() ) : '';
+
+			if ( '' !== $parent_text && $parent_text !== $text ) {
+				$text = '' === $text ? $parent_text : $text . ' ' . $parent_text;
+			}
+		}
+
+		if ( '' === $text ) {
+			$text = $this->clean_description( (string) $product->get_name() );
+		}
+
+		return trim( mb_substr( $text, 0, self::DESCRIPTION_MAX_LENGTH, 'UTF-8' ) );
+	}
+
+	/**
+	 * Turn a product description into plain text on one line.
+	 *
+	 * @since 5.4.0
+	 *
+	 * @param string $raw Description as stored on the product.
+	 *
+	 * @return string
+	 */
+	private function clean_description( string $raw ): string {
+		$text = wp_check_invalid_utf8( $raw, true );
+		$text = $this->replace_shortcodes_with_content( $text );
+		$text = $this->remove_unregistered_shortcode_pairs( $text );
+		// Encode a "<" that cannot open a tag, such as "<12", so stripping tags does not drop the text after it.
+		$escaped = preg_replace( '#<(?![a-zA-Z/!?])#', '&lt;', $text );
+		$text    = null === $escaped ? $text : $escaped;
+		// Pad block tags and line breaks so words on either side stay apart.
+		$padded = preg_replace( '#<(?:br|hr|/?(?:p|div|li|ul|ol|dl|h[1-6]|tr|td|th|table|blockquote|dd|dt|pre|section|article|header|footer|aside|nav|main|address|figure|figcaption))\b[^>]*>#i', ' $0 ', $text );
+		$text   = null === $padded ? $text : $padded;
+		$text   = wp_strip_all_tags( $text );
+		// Decode after stripping tags, so encoded markup such as &lt;b&gt; stays as text.
+		$text = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$text = preg_replace( '/\s+/u', ' ', $text );
+
+		return trim( (string) $text );
+	}
+
+	/**
+	 * Replace registered shortcodes by their enclosed content.
+	 *
+	 * Keeps the content strip_shortcodes() would drop, so page-builder text survives.
+	 *
+	 * @since 5.4.0
+	 *
+	 * @param string $text Text that may contain shortcodes.
+	 *
+	 * @return string
+	 */
+	private function replace_shortcodes_with_content( string $text ): string {
+		global $shortcode_tags;
+
+		if ( false === strpos( $text, '[' ) || empty( $shortcode_tags ) || ! is_array( $shortcode_tags ) ) {
+			return $text;
+		}
+
+		$replaced = preg_replace_callback(
+			'/' . get_shortcode_regex() . '/',
+			function ( array $matches ): string {
+				// An escaped [[tag]] is literal text, which WordPress renders as [tag].
+				if ( '[' === $matches[1] && ']' === $matches[6] ) {
+					return substr( $matches[0], 1, -1 );
+				}
+
+				return $this->replace_shortcodes_with_content( $matches[5] );
+			},
+			$text
+		);
+
+		// A regex failure returns null; keep the text rather than send nothing.
+		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Replace paired shortcodes that are not registered by their enclosed content.
+	 *
+	 * Page-builder markup stays in the description when its plugin is inactive, or
+	 * registers its shortcodes only on front-end requests. Only a tag with a matching
+	 * closing tag is removed, so bracket text such as "[5 pack]" is kept.
+	 *
+	 * @since 5.4.0
+	 *
+	 * @param string $text Text after registered shortcodes are replaced.
+	 *
+	 * @return string
+	 */
+	private function remove_unregistered_shortcode_pairs( string $text ): string {
+		if ( false === strpos( $text, '[/' ) ) {
+			return $text;
+		}
+
+		// Each pass removes one level of nesting; stop when nothing changes.
+		for ( $pass = 0; $pass < 10; $pass++ ) {
+			$replaced = preg_replace( '#(?<!\[)\[([a-zA-Z][\w-]*)(?:\s[^\]]*)?\](.*?)\[/\1\](?!\])#s', '$2', $text );
+			if ( null === $replaced || $replaced === $text ) {
+				break;
+			}
+			$text = $replaced;
+		}
+
+		return $text;
 	}
 
 	/**

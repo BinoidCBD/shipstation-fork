@@ -16,6 +16,7 @@ use WC_Order;
 use WC_Order_Refund;
 use WC_Order_Item;
 use WC_Order_Item_Coupon;
+use WC_Order_Item_Fee;
 use WC_Order_Item_Product;
 use WC_Order_Item_Shipping;
 use WC_Order_Item_Tax;
@@ -27,9 +28,10 @@ use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
 use WooCommerce\Shipping\ShipStation\Order_Util;
+use WooCommerce\Shipping\ShipStation\GPDT\Prepaid_Duties;
 use WooCommerce\Shipping\ShipStation\Checkout;
 use Automattic\WooCommerce\Utilities\NumberUtil;
-use Automattic\WooCommerce\Enums\OrderStatus;
+use WooCommerce\Shipping\ShipStation\Enum_Helper;
 use WP_Error;
 use WooCommerce\Shipping\ShipStation\Logger;
 
@@ -51,6 +53,25 @@ class Orders_Controller extends API_Controller {
 	 * @var string
 	 */
 	protected string $rest_base = 'orders';
+
+	/**
+	 * Alias of Order_Util::NO_STATUS_MATCH_TRANSIENT. The constant was public
+	 * here in 5.3.5, so it stays as a compatibility alias.
+	 *
+	 * @internal Not a public API: subject to change without a deprecation window.
+	 *
+	 * @since 5.3.5
+	 *
+	 * @var string
+	 */
+	public const NO_STATUS_MATCH_TRANSIENT = Order_Util::NO_STATUS_MATCH_TRANSIENT;
+
+	/**
+	 * Order IDs the shrunken-page warning names.
+	 *
+	 * @var int
+	 */
+	private const MAX_SKIPPED_IDS_LOGGED = 20;
 
 	/**
 	 * Per-order currency code used for export context.
@@ -196,16 +217,27 @@ class Orders_Controller extends API_Controller {
 					'status_mapping' => array(
 						'description'       => __( 'Mapping of WooCommerce order statuses to ShipStation statuses. Format: wc_status:ShipStationStatus (e.g., processing:AwaitingShipment). Accepts multiple values.', 'woocommerce-shipstation-integration' ),
 						'type'              => 'array',
+						// Schema documentation only: has_valid_params() skips
+						// an arg with no validate_callback, so the sanitize
+						// callback below is what actually enforces the shape.
+						// Deliberate - a strict validator would answer 400 to
+						// requests ShipStation is served today.
+						'items'             => array( 'type' => 'string' ),
 						'sanitize_callback' => function ( $value ) {
 							if ( empty( $value ) ) {
 								return array();
 							}
-							return is_array( $value ) ? $value : array( $value );
+							$values = is_array( $value ) ? $value : array( $value );
+
+							// Drop nested arrays; explode() would fatal on them.
+							return array_values( array_map( 'strval', array_filter( $values, 'is_scalar' ) ) );
 						},
 					),
 					'order_ids'      => array(
 						'description'       => __( 'Return specific orders by ID. When present, page/per_page/modified_after are ignored and orders are returned regardless of status.', 'woocommerce-shipstation-integration' ),
 						'type'              => 'array',
+						// Schema documentation only; the sanitize callback is
+						// the guard. See status_mapping above.
 						'items'             => array( 'type' => 'integer' ),
 						'validate_callback' => function ( $value ) {
 							if ( is_array( $value ) && count( $value ) > 500 ) {
@@ -235,7 +267,10 @@ class Orders_Controller extends API_Controller {
 			)
 		);
 
-		// Register the endpoint for updating order shipment data.
+		// Register the endpoint for updating order shipment data. The full
+		// route is duplicated in Main::SHIPMENTS_ROUTE, which classifies the
+		// raw request before controllers load; moving this route means
+		// updating that constant too.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/shipments',
@@ -355,11 +390,227 @@ class Orders_Controller extends API_Controller {
 	/**
 	 * Retrieve the orders data.
 	 *
+	 * A throwable escaping here used to die mid-dispatch with nothing logged
+	 * (SHIPSTN-171); it is answered with a logged 500 instead.
+	 *
+	 * @since 5.3.5 Uncontained failures return a logged 500.
+	 *
 	 * @param WP_REST_Request $request Request object.
 	 *
 	 * @return WP_REST_Response
 	 */
 	public function get_orders( WP_REST_Request $request ): WP_REST_Response {
+		// The buffer is what makes the 500 below reach ShipStation. Output from
+		// a third-party callback during the batch sends the headers, and the
+		// status is then already 200: without it ShipStation gets that 200 with
+		// an unparseable body and no reason to retry (SHIPSTN-171).
+		$buffer_level = ob_get_level();
+		$failure      = null;
+		$response     = null;
+		$stray        = '';
+
+		ob_start();
+
+		try {
+			$response = $this->process_get_orders( $request );
+		} catch ( \Throwable $e ) {
+			$failure = $e;
+		} finally {
+			$stray = Order_Util::discard_buffers_safely( $buffer_level );
+		}
+
+		if ( null !== $failure ) {
+			Order_Util::log_uncontained_export_failure( $failure, $stray );
+
+			return new WP_REST_Response( array( 'message' => __( 'Error retrieving orders.', 'woocommerce-shipstation-integration' ) ), 500 );
+		}
+
+		$this->log_stray_export_output( $stray );
+
+		return $response;
+	}
+
+	/**
+	 * Record output discarded from the export buffer.
+	 *
+	 * Keeping it out of the response is not enough on its own: the plugin that
+	 * printed it stays unidentifiable unless the log says so (SHIPSTN-171).
+	 *
+	 * The write runs outside the boundary and is a handoff of its own -- any
+	 * plugin can replace the logger -- so it is isolated: contained against a
+	 * handler that throws, buffered against one that prints.
+	 *
+	 * @since 5.3.5
+	 *
+	 * @param string $stray Discarded output, already bounded.
+	 * @return void
+	 */
+	private function log_stray_export_output( string $stray ): void {
+		if ( '' === trim( $stray ) ) {
+			return;
+		}
+
+		Order_Util::log_isolated(
+			'the discarded-output warning',
+			static function () use ( $stray ) {
+				Logger::warning(
+					sprintf(
+						/* translators: %s: the discarded output */
+						__( 'Output emitted during the orders export was discarded to keep the response valid. Another plugin is printing during the export: %s', 'woocommerce-shipstation-integration' ),
+						$stray
+					)
+				);
+			}
+		);
+	}
+
+	/**
+	 * Record a contained degradation without letting the write fail the page.
+	 *
+	 * These run inside the export boundary, so a replaced logger that threw
+	 * would turn a page that degraded gracefully into a 500, and one that
+	 * printed would corrupt the payload (SHIPSTN-171).
+	 *
+	 * @since 5.3.5
+	 *
+	 * @param string $message Composed message; foreign text already sanitised.
+	 * @return void
+	 */
+	private static function log_export_degradation( string $message ): void {
+		Order_Util::log_isolated(
+			'the export degradation log',
+			static function () use ( $message ) {
+				Logger::error( $message );
+			}
+		);
+	}
+
+	/**
+	 * Warn once per page when it carries fewer orders than the query found.
+	 *
+	 * A page that shrinks below the advertised pagination total is the ticket's
+	 * own symptom, and on a default install nothing said so: the skip was a
+	 * debug line, and the export_order filter's skip was not logged at all
+	 * (SHIPSTN-171). One line per page instead of one per order, because
+	 * per_page reaches 500 and a store that legitimately excludes orders would
+	 * otherwise write that many entries on every poll, forever.
+	 *
+	 * Contained: a log write is a handoff, and one broken handler must not fail
+	 * the whole page.
+	 *
+	 * @since 5.3.5
+	 *
+	 * @param int   $filtered_out Orders the export_order filter declined.
+	 * @param int[] $unavailable  Order IDs that produced no exportable order.
+	 * @return void
+	 */
+	private function warn_page_shrank( int $filtered_out, array $unavailable ): void {
+		if ( 0 === $filtered_out && empty( $unavailable ) ) {
+			return;
+		}
+
+		$sample = array_slice( $unavailable, 0, self::MAX_SKIPPED_IDS_LOGGED );
+
+		$message = sprintf(
+			/* translators: 1: orders declined by the filter, 2: orders that could not be loaded, 3: comma-separated order IDs, or a dash */
+			__( 'This orders page is shorter than the query found: %1$d declined by the woocommerce_shipstation_export_order filter, %2$d could not be loaded (IDs: %3$s).', 'woocommerce-shipstation-integration' ),
+			$filtered_out,
+			count( $unavailable ),
+			empty( $sample ) ? '-' : implode( ', ', $sample )
+		);
+
+		Order_Util::log_isolated(
+			'the shrunken-page warning',
+			static function () use ( $message ) {
+				Logger::warning( $message );
+			}
+		);
+	}
+
+	/**
+	 * Log when explicitly requested order IDs were not exported.
+	 *
+	 * The by-IDs path has no query and no page: ShipStation named each ID, so
+	 * an ID that cannot be loaded deserves its own wording, not the paged
+	 * surface's (an unknown ID is a data problem; a shrunken page is a hook).
+	 *
+	 * @since 5.3.5
+	 *
+	 * @param int   $filtered_out Orders declined by the export filter.
+	 * @param array $unavailable  Requested IDs that resolved to no exportable order.
+	 * @return void
+	 */
+	private function warn_requested_ids_missing( int $filtered_out, array $unavailable ): void {
+		if ( 0 === $filtered_out && empty( $unavailable ) ) {
+			return;
+		}
+
+		$sample = array_slice( $unavailable, 0, self::MAX_SKIPPED_IDS_LOGGED );
+
+		$message = sprintf(
+			/* translators: 1: orders declined by the filter, 2: requested order IDs that could not be loaded, 3: comma-separated order IDs, or a dash */
+			__( 'Not every requested order was exported: %1$d declined by the woocommerce_shipstation_export_order filter, %2$d of the order_ids could not be loaded (IDs: %3$s).', 'woocommerce-shipstation-integration' ),
+			$filtered_out,
+			count( $unavailable ),
+			empty( $sample ) ? '-' : implode( ', ', $sample )
+		);
+
+		Order_Util::log_isolated(
+			'the missing-requested-orders warning',
+			static function () use ( $message ) {
+				Logger::warning( $message );
+			}
+		);
+	}
+
+	/**
+	 * The empty page, in the envelope a zero-result query produces.
+	 *
+	 * @since 5.3.7
+	 *
+	 * @param int $page     Requested page number.
+	 * @param int $per_page Requested page size.
+	 * @return WP_REST_Response
+	 */
+	private function empty_orders_page( int $page, int $per_page ): WP_REST_Response {
+		return new WP_REST_Response( $this->orders_page_data( array(), $page, $per_page, 0, 0 ), 200 );
+	}
+
+	/**
+	 * The orders page envelope.
+	 *
+	 * @since 5.3.7
+	 *
+	 * @param array $sales_orders Order payloads.
+	 * @param int   $page         Page number.
+	 * @param int   $per_page     Page size.
+	 * @param int   $total        Total orders reported.
+	 * @param int   $total_pages  Total pages reported.
+	 * @return array
+	 */
+	private function orders_page_data( array $sales_orders, int $page, int $per_page, int $total, int $total_pages ): array {
+		return array(
+			'sales_orders' => $sales_orders,
+			'pagination'   => array(
+				'page'        => $page,
+				'per_page'    => $per_page,
+				'total'       => $total,
+				'total_pages' => $total_pages,
+				'has_more'    => $page < $total_pages,
+			),
+		);
+	}
+
+	/**
+	 * Build the orders export response. Runs inside the get_orders() boundary.
+	 *
+	 * @since 5.3.5
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 *
+	 * @return WP_REST_Response
+	 */
+	private function process_get_orders( WP_REST_Request $request ): WP_REST_Response {
 		$request_params = $request->get_params();
 
 		/**
@@ -418,28 +669,109 @@ class Orders_Controller extends API_Controller {
 			}
 		}
 
-		if ( empty( $order_statuses ) ) {
-			// If no statuses are provided, use the default export statuses.
-			// This is to ensure that we always have some statuses to query.
-			// Default export statuses can be defined in the integration class.
-			$order_statuses = WC_ShipStation_Integration::$export_statuses;
-			$this->log( __( 'No order statuses provided in the request. Using default export statuses from the settings.', 'woocommerce-shipstation-integration' ) );
-		} else {
-			// Only use the order status that has been set from the ShipStation plugin settings.
-			$order_statuses = array_unique( $order_statuses );
-			$order_statuses = array_intersect(
-				$order_statuses,
-				WC_ShipStation_Integration::$export_statuses
-			);
+		$export_statuses = (array) WC_ShipStation_Integration::$export_statuses;
+		$partition       = Order_Util::partition_export_statuses( $export_statuses );
+		$matchable       = $partition['kept'];
+		$skipped         = $partition['skipped'];
 
-			// If no valid order statuses,
-			// use unregistered/invalid order statuses to make sure the WC Order query return 0 order.
-			if ( empty( $order_statuses ) ) {
-				$order_statuses = array( 'wc-shipstation-unknown' );
+		// Query only the registered entries; see Order_Util::matchable_export_statuses().
+		if ( empty( $matchable ) ) {
+			Order_Util::warn_export_statuses_cannot_match( $export_statuses );
+
+			return $this->empty_orders_page( $page, $per_page );
+		}
+
+		if ( empty( $order_statuses ) ) {
+			Order_Util::warn_skipped_export_statuses( $skipped );
+
+			// No statuses in the request: query the matchable export statuses.
+			$order_statuses = $matchable;
+
+			$requested_mapping = array_values( array_filter( $status_mapping, 'is_string' ) );
+
+			if ( empty( $requested_mapping ) ) {
+				$this->log( __( 'No order statuses provided in the request. Using default export statuses from the settings.', 'woocommerce-shipstation-integration' ) );
+			} else {
+				// A supplied mapping that resolves to nothing is a
+				// misconfiguration, not an absent parameter: the fallback is
+				// the same, but the log must not claim nothing was asked for
+				// (SHIPSTN-171).
+				// Request data on its way to a log line: statuses_for_log()
+				// bounds it so one poll cannot write a large entry, and
+				// sanitises it because wc_clean() leaves the non-newline
+				// control characters alone.
+				sort( $requested_mapping );
+				$reported_mapping = Order_Util::statuses_for_log( $requested_mapping );
+
+				// The key seed covers the full sorted set: seeding from the
+				// shortened text would let two mappings that agree on their
+				// first entries share a throttle and hide the second one.
+				Order_Util::warn_export_status_once(
+					'unresolved|' . implode( ',', $requested_mapping ),
+					sprintf(
+						/* translators: 1: status mapping requested by ShipStation, 2: export statuses queried instead */
+						__( 'The requested status mapping (%1$s) could not be resolved to any order status. Using the default export statuses (%2$s).', 'woocommerce-shipstation-integration' ),
+						$reported_mapping,
+						Order_Util::statuses_for_log( $matchable )
+					)
+				);
 			}
+		} else {
+			// Query only statuses that are both requested and matchable.
+			$requested_statuses = array_unique( $order_statuses );
+			$order_statuses     = array_intersect( $requested_statuses, $matchable );
+
+			// Nothing requested can be served, so answer without a query.
+			if ( empty( $order_statuses ) ) {
+				// The one empty page that used to say nothing in the log
+				// (SHIPSTN-171). Throttled per requested status set, not
+				// globally: a store polled by two connections has two mappings,
+				// and a single key reports whichever mismatched first and hides
+				// the other. Sorted so the same set always hashes alike.
+				$throttle_statuses = $requested_statuses;
+				sort( $throttle_statuses );
+
+				// Enabled in the setting but no longer registered, typically a
+				// deactivated custom-status plugin: a different cause, so its
+				// own line and throttle, and the skipped-status line stays
+				// quiet because it would name the same statuses. Only when
+				// every requested status is one: otherwise the mismatch line
+				// names the request and the statuses that can be queried, and
+				// the skipped-status line explains the rest.
+				$unregistered = array_intersect( $throttle_statuses, Order_Util::prefixed_export_statuses( $skipped ) );
+
+				if ( ! empty( $unregistered ) && count( $unregistered ) === count( $throttle_statuses ) ) {
+					Order_Util::warn_export_status_once(
+						'unregistered|' . implode( ',', $unregistered ),
+						sprintf(
+							/* translators: %s: statuses enabled for export that are no longer registered */
+							__( 'The requested status mapping resolves only to export statuses that are no longer registered on this store (%s). Returning an empty orders page. The plugin that added these statuses may be deactivated.', 'woocommerce-shipstation-integration' ),
+							Order_Util::statuses_for_log( $unregistered )
+						)
+					);
+				} else {
+					Order_Util::warn_skipped_export_statuses( $skipped );
+					Order_Util::warn_export_status_once(
+						'mismatch|' . implode( ',', $throttle_statuses ),
+						sprintf(
+							/* translators: 1: statuses requested by ShipStation, 2: export statuses that are enabled and registered */
+							__( 'The requested status mapping (%1$s) matches no enabled export status (%2$s). Returning an empty orders page. Review the Export Order Statuses setting.', 'woocommerce-shipstation-integration' ),
+							Order_Util::statuses_for_log( $requested_statuses ),
+							Order_Util::statuses_for_log( $matchable )
+						)
+					);
+				}
+
+				return $this->empty_orders_page( $page, $per_page );
+			}
+
+			Order_Util::warn_skipped_export_statuses( $skipped );
 		}
 
 		$args = array(
+			// Refund rows are stored as wc-completed; without the pin they eat
+			// page slots and inflate the totals (SHIPSTN-171).
+			'type'     => 'shop_order',
 			'status'   => $order_statuses,
 			'limit'    => $per_page,
 			'paged'    => $page,
@@ -456,26 +788,28 @@ class Orders_Controller extends API_Controller {
 		$results = wc_get_orders( $args );
 
 		if ( is_wp_error( $results ) ) {
+			// The last 500 path that logged nothing (SHIPSTN-171).
+			$query_error = sprintf(
+				/* translators: %s: error message from the order query */
+				__( 'The orders query failed: %s. No orders were returned to ShipStation.', 'woocommerce-shipstation-integration' ),
+				// Foreign text: WP_Error here comes from a third-party
+				// woocommerce_order_query callback.
+				Order_Util::sanitize_for_log( $results->get_error_message() )
+			);
+
+			Order_Util::log_isolated(
+				'the failed-query error',
+				static function () use ( $query_error ) {
+					Logger::error( $query_error );
+				}
+			);
+
 			return new WP_REST_Response( array( 'message' => __( 'Error retrieving orders.', 'woocommerce-shipstation-integration' ) ), 500 );
 		}
 
 		$total_orders = $results->total;
 
-		// Calculate pagination information.
-		$total_pages = $results->max_num_pages;
-		$has_more    = $page < $total_pages;
-
-		// Prepare the response data.
-		$sales_orders_data = array(
-			'sales_orders' => array(),
-			'pagination'   => array(
-				'page'        => $page,
-				'per_page'    => $per_page,
-				'total'       => $total_orders,
-				'total_pages' => $total_pages,
-				'has_more'    => $has_more,
-			),
-		);
+		$sales_orders_data = $this->orders_page_data( array(), $page, $per_page, (int) $total_orders, (int) $results->max_num_pages );
 
 		if ( empty( $results->orders ) || empty( $total_orders ) ) {
 			// No sales orders found, return an empty response.
@@ -483,6 +817,9 @@ class Orders_Controller extends API_Controller {
 		}
 
 		$ids_to_fetch = array();
+		$filtered_out = 0;
+		$unavailable  = array();
+
 		foreach ( $results->orders as $order_id ) {
 			/**
 			 * Allow third party to skip the export of certain order ID.
@@ -494,38 +831,59 @@ class Orders_Controller extends API_Controller {
 			 */
 			if ( apply_filters( 'woocommerce_shipstation_export_order', true, $order_id ) ) {
 				$ids_to_fetch[] = (int) $order_id;
-			}
-		}
-
-		$orders_by_id = $this->get_orders_by_ids( $ids_to_fetch );
-		$this->prime_batch_caches( $ids_to_fetch );
-		Order_Util::prime_products_for_batch( $orders_by_id );
-
-		$orders_to_mark = array();
-		foreach ( $ids_to_fetch as $order_id ) {
-			/**
-			 * Allow third party to change the order object.
-			 *
-			 * @param WC_Order $order Order object.
-			 *
-			 * @since 4.1.42
-			 */
-			$order = apply_filters(
-				'woocommerce_shipstation_export_get_order',
-				$orders_by_id[ $order_id ] ?? false
-			);
-
-			if ( ! Order_Util::is_wc_order( $order ) ) {
-				/* translators: 1: order id */
-				$this->log( sprintf( __( 'Order %s can not be found.', 'woocommerce-shipstation-integration' ), $order_id ) );
 				continue;
 			}
 
-			$sales_orders_data['sales_orders'][] = $this->get_order_data( $order );
-			$orders_to_mark[]                    = $order;
+			++$filtered_out;
 		}
 
-		Order_Util::mark_orders_exported_bulk( $orders_to_mark );
+		// Must run BEFORE the order hydration below; see the
+		// prime_refunds_for_batch() docblock for the rationale (SHIPSTN-164).
+		Order_Util::prime_refunds_for_batch( $ids_to_fetch );
+
+		$orders_by_id = $this->get_orders_by_ids( $ids_to_fetch );
+
+		$orders_to_mark = array();
+
+		try {
+			// Inside the try: the notes prime seeds the map for every ID before
+			// it queries, and its queries run third-party comment-clause
+			// callbacks that can throw, which would leave the map populated.
+			$this->prime_batch_caches( $ids_to_fetch );
+			Order_Util::prime_products_for_batch( $orders_by_id );
+
+			foreach ( $ids_to_fetch as $order_id ) {
+				/**
+				 * Allow third party to change the order object.
+				 *
+				 * @param WC_Order $order Order object.
+				 *
+				 * @since 4.1.42
+				 */
+				$order = apply_filters(
+					'woocommerce_shipstation_export_get_order',
+					$orders_by_id[ $order_id ] ?? false
+				);
+
+				if ( ! Order_Util::is_wc_order( $order ) ) {
+					$unavailable[] = (int) $order_id;
+					continue;
+				}
+
+				$sales_orders_data['sales_orders'][] = $this->get_order_data( $order );
+				$orders_to_mark[]                    = $order;
+			}
+
+			Order_Util::mark_orders_exported_bulk( $orders_to_mark );
+			$this->warn_page_shrank( $filtered_out, $unavailable );
+		} finally {
+			// The page's payload pass is over; keep the notes map from
+			// accumulating across pages in long-lived processes, even when
+			// building one order's payload throws.
+			Order_Util::flush_order_notes_cache();
+			Order_Util::flush_qty_refund_failure_log();
+			Order_Util::flush_degraded_refund_primes();
+		}
 
 		return new WP_REST_Response( $sales_orders_data, 200 );
 	}
@@ -544,78 +902,80 @@ class Orders_Controller extends API_Controller {
 	 * @return WP_REST_Response
 	 */
 	private function get_orders_by_id_param( array $requested_ids ): WP_REST_Response {
+		// Must run BEFORE the order hydration below; see the
+		// prime_refunds_for_batch() docblock for the rationale (SHIPSTN-164).
+		Order_Util::prime_refunds_for_batch( $requested_ids );
+
 		$orders_by_id = $this->get_orders_by_ids( $requested_ids, array( 'status' => 'any' ) );
-		$this->prime_batch_caches( array_keys( $orders_by_id ) );
-		Order_Util::prime_products_for_batch( $orders_by_id );
 
 		$sales_orders   = array();
 		$orders_to_mark = array();
+		$filtered_out   = 0;
+		$unavailable    = array();
 
-		foreach ( $requested_ids as $order_id ) {
-			$order_id = (int) $order_id;
+		try {
+			// Inside the try: the notes prime seeds the map for every ID before
+			// it queries, and its queries run third-party comment-clause
+			// callbacks that can throw, which would leave the map populated.
+			$this->prime_batch_caches( array_keys( $orders_by_id ) );
+			Order_Util::prime_products_for_batch( $orders_by_id );
 
-			/**
-			 * Allow third party to skip the export of certain order ID.
-			 *
-			 * @param boolean $flag     Flag to skip the export.
-			 * @param int     $order_id Order ID.
-			 *
-			 * @since 4.1.42
-			 */
-			if ( ! apply_filters( 'woocommerce_shipstation_export_order', true, $order_id ) ) {
-				continue;
-			}
+			foreach ( $requested_ids as $order_id ) {
+				$order_id = (int) $order_id;
 
-			if ( ! isset( $orders_by_id[ $order_id ] ) ) {
-				Logger::warning(
-					sprintf(
-						/* translators: %d: WC order ID requested via order_ids[] that was not found. */
-						__( 'order_ids fetch: order %d not found.', 'woocommerce-shipstation-integration' ),
-						$order_id
-					)
+				/**
+				 * Allow third party to skip the export of certain order ID.
+				 *
+				 * @param boolean $flag     Flag to skip the export.
+				 * @param int     $order_id Order ID.
+				 *
+				 * @since 4.1.42
+				 */
+				if ( ! apply_filters( 'woocommerce_shipstation_export_order', true, $order_id ) ) {
+					++$filtered_out;
+					continue;
+				}
+
+				if ( ! isset( $orders_by_id[ $order_id ] ) ) {
+					$unavailable[] = $order_id;
+					continue;
+				}
+
+				/**
+				 * Allow third party to change the order object.
+				 *
+				 * @param WC_Order $order Order object.
+				 *
+				 * @since 4.1.42
+				 */
+				$order = apply_filters(
+					'woocommerce_shipstation_export_get_order',
+					$orders_by_id[ $order_id ]
 				);
-				continue;
+
+				if ( ! Order_Util::is_wc_order( $order ) ) {
+					$unavailable[] = $order_id;
+					continue;
+				}
+
+				$sales_orders[]   = $this->get_order_data( $order );
+				$orders_to_mark[] = $order;
 			}
 
-			/**
-			 * Allow third party to change the order object.
-			 *
-			 * @param WC_Order $order Order object.
-			 *
-			 * @since 4.1.42
-			 */
-			$order = apply_filters(
-				'woocommerce_shipstation_export_get_order',
-				$orders_by_id[ $order_id ]
-			);
-
-			if ( ! Order_Util::is_wc_order( $order ) ) {
-				/* translators: 1: order id */
-				$this->log( sprintf( __( 'Order %s can not be found.', 'woocommerce-shipstation-integration' ), $order_id ) );
-				continue;
-			}
-
-			$sales_orders[]   = $this->get_order_data( $order );
-			$orders_to_mark[] = $order;
+			Order_Util::mark_orders_exported_bulk( $orders_to_mark );
+			$this->warn_requested_ids_missing( $filtered_out, $unavailable );
+		} finally {
+			// The page's payload pass is over; keep the notes map from
+			// accumulating across pages in long-lived processes, even when
+			// building one order's payload throws.
+			Order_Util::flush_order_notes_cache();
+			Order_Util::flush_qty_refund_failure_log();
+			Order_Util::flush_degraded_refund_primes();
 		}
-
-		Order_Util::mark_orders_exported_bulk( $orders_to_mark );
 
 		$count = count( $sales_orders );
 
-		return new WP_REST_Response(
-			array(
-				'sales_orders' => $sales_orders,
-				'pagination'   => array(
-					'page'        => 1,
-					'per_page'    => $count,
-					'total'       => $count,
-					'total_pages' => 1,
-					'has_more'    => false,
-				),
-			),
-			200
-		);
+		return new WP_REST_Response( $this->orders_page_data( $sales_orders, 1, $count, $count, 1 ), 200 );
 	}
 
 	/**
@@ -636,8 +996,13 @@ class Orders_Controller extends API_Controller {
 	 * post cache for every ID in one round trip so the per-order `read()` calls that
 	 * follow are cache hits.
 	 *
+	 * If the bulk fetch throws (core's refund prime runs inside it and can hit
+	 * a corrupted refund row when the batch could not be pre-primed), the
+	 * batch degrades to one contained `wc_get_order()` read per order.
+	 *
 	 * @since 5.0.4
 	 * @since 5.1.0 Added the $extra_query_args parameter.
+	 * @since 5.3.4 Falls back to per-order reads when the bulk fetch throws.
 	 *
 	 * @param int[] $order_ids        Order IDs to fetch.
 	 * @param array $extra_query_args Optional extra args merged into the wc_get_orders() call.
@@ -648,16 +1013,54 @@ class Orders_Controller extends API_Controller {
 			return array();
 		}
 
-		$orders = wc_get_orders(
-			array_merge(
-				array(
-					'type'     => 'shop_order',
-					'post__in' => $order_ids,
-					'limit'    => -1,
-				),
-				$extra_query_args
-			)
-		);
+		try {
+			$orders = wc_get_orders(
+				array_merge(
+					array(
+						'type'     => 'shop_order',
+						'post__in' => $order_ids,
+						'limit'    => -1,
+					),
+					$extra_query_args
+				)
+			);
+		} catch ( \Throwable $e ) {
+			// A batch fetch runs core's refund-cache prime for any order the
+			// refund prime could not warm, and a corrupted refund row throws
+			// there (SHIPSTN-164). Single reads never run that prime, so fall
+			// back to one read per order and let an unreadable order degrade
+			// alone. The fallback drops $extra_query_args and the query's
+			// 'type' filter: the by-ID path is status-agnostic by design and
+			// the paged path pre-filtered its IDs, but wc_get_order() returns
+			// whatever the ID resolves to, so the type is re-checked below to
+			// keep WC_Order subclasses like subscriptions out of the export.
+			self::log_export_degradation(
+				sprintf(
+					'Bulk order fetch failed while loading the export batch: %s: %s. Retrying per order.',
+					get_class( $e ),
+					Order_Util::sanitize_for_log( $e->getMessage() )
+				)
+			);
+
+			$orders = array();
+			foreach ( $order_ids as $order_id ) {
+				try {
+					$order = wc_get_order( $order_id );
+					if ( $order instanceof \WC_Order && 'shop_order' === $order->get_type() ) {
+						$orders[] = $order;
+					}
+				} catch ( \Throwable $order_error ) {
+					self::log_export_degradation(
+						sprintf(
+							'Order #%d could not be read and was left out of the export: %s: %s',
+							$order_id,
+							get_class( $order_error ),
+							Order_Util::sanitize_for_log( $order_error->getMessage() )
+						)
+					);
+				}
+			}
+		}
 
 		$indexed = array();
 		foreach ( (array) $orders as $order ) {
@@ -677,6 +1080,10 @@ class Orders_Controller extends API_Controller {
 	 * trigger its bulk priming helper, so without this the first `$order->get_items()`
 	 * on each order issues a separate SELECT.
 	 *
+	 * Refunds are NOT primed here: both callers run
+	 * `Order_Util::prime_refunds_for_batch()` before hydrating the batch's
+	 * order objects (see its docblock, SHIPSTN-164).
+	 *
 	 * @since 5.0.4
 	 *
 	 * @param int[] $order_ids Orders IDs.
@@ -688,7 +1095,6 @@ class Orders_Controller extends API_Controller {
 		}
 
 		Order_Util::prime_order_items_for_batch( $order_ids );
-		Order_Util::prime_refunds_for_batch( $order_ids );
 		Order_Util::prime_order_notes_for_batch( $order_ids );
 	}
 
@@ -936,15 +1342,15 @@ class Orders_Controller extends API_Controller {
 	public function get_payment_status( string $order_status ): string {
 		// Map WooCommerce order status to ShipStation payment status.
 		switch ( $order_status ) {
-			case OrderStatus::PENDING:
+			case Enum_Helper::status_pending():
 				return WC_ShipStation_Integration::AWAITING_PAYMENT_STATUS;
-			case OrderStatus::ON_HOLD:
+			case Enum_Helper::status_on_hold():
 				return WC_ShipStation_Integration::AWAITING_PAYMENT_STATUS;
-			case OrderStatus::CANCELLED:
+			case Enum_Helper::status_cancelled():
 				return WC_ShipStation_Integration::PAYMENT_CANCELLED_STATUS;
-			case OrderStatus::REFUNDED:
+			case Enum_Helper::status_refunded():
 				return WC_ShipStation_Integration::PAYMENT_CANCELLED_STATUS;
-			case OrderStatus::FAILED:
+			case Enum_Helper::status_failed():
 				return WC_ShipStation_Integration::PAYMENT_FAILED_STATUS;
 			default:
 				return WC_ShipStation_Integration::PAID_STATUS;
@@ -1048,6 +1454,11 @@ class Orders_Controller extends API_Controller {
 		$order_items       = $order->get_items( array( 'line_item', 'fee' ) );
 
 		foreach ( $order_items as $item ) {
+			// The prepaid duties amount belongs in the `duties` object, never in the items.
+			if ( $item instanceof WC_Order_Item_Fee && Prepaid_Duties::is_prepaid_duties_fee( $item ) ) {
+				continue;
+			}
+
 			$fulfillment_item = $this->get_fulfillment_item( $item, $order, 0, $extra_args );
 
 			if ( empty( $fulfillment_item ) ) {
@@ -1192,7 +1603,7 @@ class Orders_Controller extends API_Controller {
 			$item_taxes = $item->get_taxes();
 
 			if ( 0 === $quantity ) {
-				$quantity = $item->get_quantity() - abs( $order->get_qty_refunded_for_item( $item_id ) );
+				$quantity = $item->get_quantity() - Order_Util::safe_qty_refunded_for_item( $order, $item_id );
 			}
 
 			// With a non-integer quantity (i.e. 0.375) always export the quantity as 1 with an added product details key-value.
@@ -1253,6 +1664,9 @@ class Orders_Controller extends API_Controller {
 	/**
 	 * Get returns info for the order.
 	 *
+	 * A refund that cannot be read (corrupted row, SHIPSTN-164) degrades this
+	 * order to empty returns data instead of fataling the whole export batch.
+	 *
 	 * @param WC_Order $order Order object.
 	 *
 	 * @return array
@@ -1260,48 +1674,80 @@ class Orders_Controller extends API_Controller {
 	public function get_returns( $order ) {
 		$returns = array();
 
-		foreach ( $order->get_refunds() as $refund ) {
-			$qty = 0;
-			foreach ( $refund->get_items() as $refunded_item ) {
-				$qty += $refunded_item->get_quantity();
-			}
-
-			/**
-			 * Filters the return status for a refund.
-			 *
-			 * @since 5.0.0
-			 *
-			 * @param string          $status The return status.
-			 * @param WC_Order_Refund $refund The refund object.
-			 * @param WC_Order        $order  The order object.
-			 */
-			$status      = apply_filters( 'woocommerce_shipstation_return_status', ucwords( $refund->get_status() ), $refund, $order );
-			$refund_args = $refund->get_meta( '_wc_shipstation_refund_args', true );
-			$return_data = array(
-				'status'             => $status,
-				'created_date_time'  => $this->get_shipstation_date_format( $refund->get_date_created() ),
-				'modified_date_time' => $this->get_shipstation_date_format( $refund->get_date_modified() ),
-				'total_quantity'     => abs( $qty ),
-				'currency'           => $this->get_currency_code(),
-				'authorization'      => array(
-					/**
-					 * Filters whether the return is approved.
-					 *
-					 * @since 5.0.0
-					 *
-					 * @param bool            $is_approved Whether the return is approved.
-					 * @param WC_Order_Refund $refund      The refund object.
-					 * @param WC_Order        $order       The order object.
-					 */
-					'is_approved' => apply_filters( 'woocommerce_shipstation_return_is_approved', true, $refund, $order ),
-				),
-				'refunds'            => $this->get_refund_data( $refund ),
+		try {
+			$refunds = $order->get_refunds();
+		} catch ( \Throwable $e ) {
+			self::log_export_degradation(
+				sprintf(
+					'Refunds for order %d could not be read and were left out of the export: %s: %s',
+					$order->get_id(),
+					get_class( $e ),
+					Order_Util::sanitize_for_log( $e->getMessage() )
+				)
 			);
 
-			if ( ! empty( $refund_args['restock_items'] ) ) {
-				$return_data['return_requested_fulfillments'] = $this->get_return_requested_fulfillments( $refund );
+			return $returns;
+		}
+
+		// Per-refund containment: the refunds are hydrated by now, but reading
+		// their line items or meta, and the two filters below, can still throw
+		// on corrupt data or a broken callback. One bad refund then costs its
+		// own return entry, not the order's returns array (SHIPSTN-164).
+		foreach ( $refunds as $refund ) {
+			try {
+				$qty = 0;
+				foreach ( $refund->get_items() as $refunded_item ) {
+					$qty += $refunded_item->get_quantity();
+				}
+
+				/**
+				 * Filters the return status for a refund.
+				 *
+				 * @since 5.0.0
+				 *
+				 * @param string          $status The return status.
+				 * @param WC_Order_Refund $refund The refund object.
+				 * @param WC_Order        $order  The order object.
+				 */
+				$status      = apply_filters( 'woocommerce_shipstation_return_status', ucwords( $refund->get_status() ), $refund, $order );
+				$refund_args = $refund->get_meta( '_wc_shipstation_refund_args', true );
+				$return_data = array(
+					'status'             => $status,
+					'created_date_time'  => $this->get_shipstation_date_format( $refund->get_date_created() ),
+					'modified_date_time' => $this->get_shipstation_date_format( $refund->get_date_modified() ),
+					'total_quantity'     => abs( $qty ),
+					'currency'           => $this->get_currency_code(),
+					'authorization'      => array(
+						/**
+						 * Filters whether the return is approved.
+						 *
+						 * @since 5.0.0
+						 *
+						 * @param bool            $is_approved Whether the return is approved.
+						 * @param WC_Order_Refund $refund      The refund object.
+						 * @param WC_Order        $order       The order object.
+						 */
+						'is_approved' => apply_filters( 'woocommerce_shipstation_return_is_approved', true, $refund, $order ),
+					),
+					'refunds'            => $this->get_refund_data( $refund ),
+				);
+
+				if ( ! empty( $refund_args['restock_items'] ) ) {
+					$return_data['return_requested_fulfillments'] = $this->get_return_requested_fulfillments( $refund );
+				}
+				$returns[] = $return_data;
+			} catch ( \Throwable $e ) {
+				self::log_export_degradation(
+					sprintf(
+						'Refund #%d of order #%d could not be serialized and was left out of the export: %s: %s',
+						$refund->get_id(),
+						$order->get_id(),
+						get_class( $e ),
+						Order_Util::sanitize_for_log( $e->getMessage() )
+					)
+				);
+				continue;
 			}
-			$returns[] = $return_data;
 		}
 
 		return $returns;
@@ -1926,6 +2372,12 @@ class Orders_Controller extends API_Controller {
 			);
 		}
 
+		// The item counts above can memoise refund read failures. Flush the
+		// memo like the export loops do, so a later notification for the same
+		// order in a long-lived process still logs the recurring failure.
+		Order_Util::flush_qty_refund_failure_log();
+		Order_Util::flush_degraded_refund_primes();
+
 		return new WP_REST_Response(
 			array(
 				'notification_results' => $response,
@@ -1952,6 +2404,31 @@ class Orders_Controller extends API_Controller {
 		$tracking_url       = ! empty( $notification['tracking_url'] ) ? wc_clean( wp_unslash( $notification['tracking_url'] ) ) : '';
 		$carrier            = ! empty( $notification['carrier_code'] ) ? wc_clean( wp_unslash( $notification['carrier_code'] ) ) : '';
 
+		// Idempotency key so ShipStation's hourly retries (SHIPSTN-53) do not
+		// re-add the note or re-increment the shipped counter. notification_id is
+		// unique per shipment and is expected to be present (update_orders_shipments
+		// skips notifications with an empty notification_id); the guard keeps dedup
+		// a no-op if it ever is not.
+		//
+		// The read here and the mark after the note are not atomic, so two
+		// concurrent retries can both pass. Accepted: ShipStation retries hourly,
+		// and closing the window needs row locking. Do not move the mark ahead of
+		// add_order_note() -- a failure between the two must re-add the note
+		// rather than silently drop a legitimate one.
+		$shipment_key          = ! empty( $notification['notification_id'] ) ? (string) wc_clean( wp_unslash( (string) $notification['notification_id'] ) ) : '';
+		$shipment_is_duplicate = Order_Util::shipment_already_processed( $order, $shipment_key );
+
+		if ( $shipment_is_duplicate ) {
+			$this->log(
+				sprintf(
+					/* translators: 1) notification ID 2) order ID */
+					__( 'Notification ID: %1$s was already recorded on order %2$s. Skipping the tracking note, the Shipment Tracking write and the shipped-item count.', 'woocommerce-shipstation-integration' ),
+					$shipment_key,
+					$order->get_id()
+				)
+			);
+		}
+
 		foreach ( $items as $item ) {
 			$item_sku    = wc_clean( (string) $item['sku'] );
 			$item_name   = wc_clean( (string) $item['description'] );
@@ -1971,6 +2448,10 @@ class Orders_Controller extends API_Controller {
 			$shipped_item_count += $qty_shipped;
 			$shipped_items[]     = $item_name . $item_sku . ' x ' . $qty_shipped;
 		}
+
+		// A corrupted refund otherwise costs this order every refund's quantity,
+		// not just the unreadable one (SHIPSTN-164).
+		Order_Util::prime_refunds_for_batch( array( $order->get_id() ) );
 
 		// Number of items in WC order.
 		$total_item_count = Order_Util::order_items_to_ship_count( $order );
@@ -2003,8 +2484,23 @@ class Orders_Controller extends API_Controller {
 				)
 			);
 
-			$order->update_meta_data( '_shipstation_shipped_item_count', $current_shipped_items + $shipped_item_count );
-			$order->save_meta_data();
+			if ( ! $shipment_is_duplicate ) {
+				$order->update_meta_data( '_shipstation_shipped_item_count', $current_shipped_items + $shipped_item_count );
+
+				// save_meta_data() fires added_order_meta / updated_order_meta
+				// and woocommerce_update_order, so the counter write is a
+				// handoff to foreign code like the marker write (SHIPSTN-165).
+				$counted = Order_Util::dispatch_safely(
+					sprintf( 'the shipped-item counter write for order %d', $order->get_id() ),
+					static function () use ( $order ) {
+						$order->save_meta_data();
+					}
+				);
+
+				if ( ! $counted ) {
+					Order_Util::discard_pending_meta_safely( $order );
+				}
+			}
 		} else {
 			// If we don't have items from SS and order items in WC.
 			$order_shipped = 0 === $total_item_count;
@@ -2024,20 +2520,20 @@ class Orders_Controller extends API_Controller {
 		$current_status = 'wc-' . $order->get_status();
 
 		// Tracking information - WC Shipment Tracking extension.
-		if ( class_exists( 'WC_Shipment_Tracking' ) ) {
-			if ( function_exists( 'wc_st_add_tracking_number' ) ) {
-				wc_st_add_tracking_number( $order->get_id(), $tracking_number, strtolower( $carrier ), $timestamp );
-			} else {
-				$order->update_meta_data( '_tracking_provider', strtolower( $carrier ) );
-				$order->update_meta_data( '_tracking_number', $tracking_number );
-				$order->update_meta_data( '_date_shipped', $timestamp );
-				$order->save_meta_data();
+		// A tracking note is customer-facing only when the Shipment Tracking
+		// extension is not active (it renders tracking itself) and the order is
+		// entering the shipped status.
+		$has_shipment_tracking = class_exists( 'WC_Shipment_Tracking' );
+		$is_customer_note      = $has_shipment_tracking ? false : WC_ShipStation_Integration::$shipped_status !== $current_status;
+
+		// Record the tracking number with the Shipment Tracking extension. Skipped
+		// on a duplicate ShipStation retry so the same shipment is not stored twice.
+		if ( $has_shipment_tracking && ! $shipment_is_duplicate ) {
+			if ( ! function_exists( 'wc_st_add_tracking_number' ) ) {
 				$this->log( __( 'You\'re using Shipment Tracking < 1.4.0. Please update!', 'woocommerce-shipstation-integration' ) );
 			}
 
-			$is_customer_note = false;
-		} else {
-			$is_customer_note = WC_ShipStation_Integration::$shipped_status !== $current_status;
+			Order_Util::store_tracking_number_safely( $order, $tracking_number, $carrier, (int) $timestamp );
 		}
 
 		$tracking_data = array(
@@ -2048,94 +2544,144 @@ class Orders_Controller extends API_Controller {
 			'xml'             => '',
 		);
 
-		/**
-		* Allow to override tracking note.
-		*
-		* @param string   $order_note
-		* @param WC_Order $order
-		* @param array    $tracking_data
-		*
-		* @since 4.5.0
-		*/
-		$order_note = apply_filters(
-			'woocommerce_shipstation_shipnotify_tracking_note',
-			$order_note,
-			$order,
-			$tracking_data
+		// A filter callback is foreign code, so each shipnotify filter runs
+		// contained; a failure keeps the unfiltered value. An uncontained throw
+		// here would abort the request between the shipped-item counter above
+		// and the processed marker below, and the retry would re-apply the
+		// counter (SHIPSTN-165).
+		Order_Util::dispatch_safely(
+			sprintf( 'the woocommerce_shipstation_shipnotify_tracking_note filter for order %d', $order->get_id() ),
+			static function () use ( &$order_note, $order, $tracking_data ) {
+				/**
+				 * Allow to override tracking note.
+				 *
+				 * @param string   $order_note
+				 * @param WC_Order $order
+				 * @param array    $tracking_data
+				 *
+				 * @since 4.5.0
+				 */
+				$order_note = apply_filters(
+					'woocommerce_shipstation_shipnotify_tracking_note',
+					$order_note,
+					$order,
+					$tracking_data
+				);
+			}
 		);
 
-		$order->add_order_note(
-			$order_note,
-			/**
-			* Allow to override should tracking note be sent to customer.
-			*
-			* @param bool     $is_customer_note
-			* @param string   $order_note
-			* @param WC_Order $order
-			* @param array    $tracking_data
-			*
-			* @since 4.5.0
-			*/
-			apply_filters(
-				'woocommerce_shipstation_shipnotify_send_tracking_note',
-				$is_customer_note,
-				$order_note,
-				$order,
-				$tracking_data
-			)
-		);
+		if ( ! $shipment_is_duplicate ) {
+			$send_to_customer = $is_customer_note;
 
-		/**
-		 * Trigger action for other integrations.
-		 *
-		 * @param WC_Order $order         Order object.
-		 * @param array    $tracking_data Tracking data.
-		 *
-		 * @since 4.0.1
-		 */
-		do_action(
-			'woocommerce_shipstation_shipnotify',
-			$order,
-			$tracking_data
-		);
-
-		// Update order status.
-		if (
-			/**
-			* Allow to override is order shipped flag.
-			*
-			* @param bool     $order_shipped
-			* @param WC_Order $order
-			* @param array    $tracking_data
-			*
-			* @since 4.5.0
-			*/
-			apply_filters(
-				'woocommerce_shipstation_shipnotify_order_shipped',
-				$order_shipped,
-				$order,
-				$tracking_data
-			)
-			&& WC_ShipStation_Integration::$shipped_status !== $current_status
-		) {
-			$order->update_status( WC_ShipStation_Integration::$shipped_status );
-
-			/* translators: 1) order ID 2) shipment status */
-			$this->log( sprintf( __( 'Updated order %1$s to status %2$s', 'woocommerce-shipstation-integration' ), $order->get_id(), WC_ShipStation_Integration::$shipped_status ) );
-
-			/**
-			 * Trigger action after the order status is changed for other integrations.
-			 *
-			 * @param WC_Order $order         Order object.
-			 * @param array    $tracking_data Tracking data.
-			 *
-			 * @since 4.5.2
-			 */
-			do_action(
-				'woocommerce_shipstation_shipnotify_status_updated',
-				$order,
-				$tracking_data
+			Order_Util::dispatch_safely(
+				sprintf( 'the woocommerce_shipstation_shipnotify_send_tracking_note filter for order %d', $order->get_id() ),
+				static function () use ( &$send_to_customer, $is_customer_note, $order_note, $order, $tracking_data ) {
+					/**
+					 * Allow to override should tracking note be sent to customer.
+					 *
+					 * @param bool     $is_customer_note
+					 * @param string   $order_note
+					 * @param WC_Order $order
+					 * @param array    $tracking_data
+					 *
+					 * @since 4.5.0
+					 */
+					$send_to_customer = apply_filters(
+						'woocommerce_shipstation_shipnotify_send_tracking_note',
+						$is_customer_note,
+						$order_note,
+						$order,
+						$tracking_data
+					);
+				}
 			);
+
+			// The note write is contained: everything WooCommerce runs after the
+			// comment row is committed -- the customer-note email and every
+			// third-party callback on it -- is code this plugin does not control,
+			// and a fatal there used to lose the shipment (SHIPSTN-165).
+			Order_Util::add_order_note_safely( $order, $order_note, (bool) $send_to_customer );
+
+			// Marked unconditionally, whatever became of the note. The shipped-item
+			// counter and the Shipment Tracking write above are not idempotent and
+			// have already landed, so a resend that is not recognised as a duplicate
+			// would count the same items twice and could complete a partially
+			// shipped order. Containment is what makes this safe: there is no
+			// longer an uncontained failure between those writes and this marker.
+			Order_Util::mark_shipment_processed( $order, $shipment_key );
+		}
+
+		Order_Util::dispatch_safely(
+			sprintf( 'the woocommerce_shipstation_shipnotify action for order %d', $order->get_id() ),
+			static function () use ( $order, $tracking_data ) {
+				/**
+				 * Trigger action for other integrations.
+				 *
+				 * @param WC_Order $order         Order object.
+				 * @param array    $tracking_data Tracking data.
+				 *
+				 * @since 4.0.1
+				 */
+				do_action(
+					'woocommerce_shipstation_shipnotify',
+					$order,
+					$tracking_data
+				);
+			}
+		);
+
+		// Update order status. The shipped flag runs contained like the other
+		// filters: an uncontained throw here would 500 on this and every retry,
+		// since the shipment is already marked processed (SHIPSTN-165).
+		Order_Util::dispatch_safely(
+			sprintf( 'the woocommerce_shipstation_shipnotify_order_shipped filter for order %d', $order->get_id() ),
+			static function () use ( &$order_shipped, $order, $tracking_data ) {
+				/**
+				 * Allow to override is order shipped flag.
+				 *
+				 * @param bool     $order_shipped
+				 * @param WC_Order $order
+				 * @param array    $tracking_data
+				 *
+				 * @since 4.5.0
+				 */
+				$order_shipped = apply_filters(
+					'woocommerce_shipstation_shipnotify_order_shipped',
+					$order_shipped,
+					$order,
+					$tracking_data
+				);
+			}
+		);
+
+		if ( $order_shipped && WC_ShipStation_Integration::$shipped_status !== $current_status ) {
+			// The transition fires the completed-order email, which is the same
+			// unbounded tail as the customer-note email (SHIPSTN-165).
+			$transitioned = Order_Util::transition_order_status_safely( $order, WC_ShipStation_Integration::$shipped_status );
+
+			if ( $transitioned ) {
+				/* translators: 1) order ID 2) shipment status */
+				$this->log( sprintf( __( 'Updated order %1$s to status %2$s', 'woocommerce-shipstation-integration' ), $order->get_id(), WC_ShipStation_Integration::$shipped_status ) );
+
+				Order_Util::dispatch_safely(
+					sprintf( 'the woocommerce_shipstation_shipnotify_status_updated action for order %d', $order->get_id() ),
+					static function () use ( $order, $tracking_data ) {
+						/**
+						 * Trigger action after the order status is changed for other integrations.
+						 *
+						 * @param WC_Order $order         Order object.
+						 * @param array    $tracking_data Tracking data.
+						 *
+						 * @since 4.5.2
+						 */
+						do_action(
+							'woocommerce_shipstation_shipnotify_status_updated',
+							$order,
+							$tracking_data
+						);
+					}
+				);
+			}
 		}
 	}
 

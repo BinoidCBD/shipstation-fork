@@ -9,12 +9,14 @@ if ( ! class_exists( 'WC_Abstract_Privacy' ) ) {
 	return;
 }
 
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound -- Legacy public class name retained for backward compatibility.
 /**
  * A class to maintain privacy.
  *
  * @package WC_ShipStation
  */
 class WC_ShipStation_Privacy extends WC_Abstract_Privacy {
+	// phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound
 	/**
 	 * Constructor
 	 */

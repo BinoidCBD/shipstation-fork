@@ -7,364 +7,444 @@ $baseDir   = dirname($vendorDir);
 
 return array(
 	'Autoloader' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-autoloader.php'
 	),
 	'Autoloader_Handler' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-autoloader-handler.php'
 	),
 	'Autoloader_Locator' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-autoloader-locator.php'
 	),
 	'Automattic\\Jetpack\\A8c_Mc_Stats' => array(
-		'version' => '3.0.5.0',
+		'version' => '4.0.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-a8c-mc-stats/src/class-a8c-mc-stats.php'
 	),
 	'Automattic\\Jetpack\\Admin_UI\\Admin_Menu' => array(
-		'version' => '0.5.12.0',
+		'version' => '0.11.3.0',
 		'path'    => $vendorDir . '/automattic/jetpack-admin-ui/src/class-admin-menu.php'
 	),
 	'Automattic\\Jetpack\\Assets' => array(
-		'version' => '4.1.2.0',
+		'version' => '5.0.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-assets/src/class-assets.php'
 	),
 	'Automattic\\Jetpack\\Assets\\Script_Data' => array(
-		'version' => '4.1.2.0',
+		'version' => '5.0.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-assets/src/class-script-data.php'
 	),
 	'Automattic\\Jetpack\\Assets\\Semver' => array(
-		'version' => '4.1.2.0',
+		'version' => '5.0.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-assets/src/class-semver.php'
 	),
+	'Automattic\\Jetpack\\Assets\\Shared_Stores_Assets' => array(
+		'version' => '5.0.2.0',
+		'path'    => $vendorDir . '/automattic/jetpack-assets/src/class-shared-stores-assets.php'
+	),
 	'Automattic\\Jetpack\\Autoloader\\AutoloadFileWriter' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/AutoloadFileWriter.php'
 	),
 	'Automattic\\Jetpack\\Autoloader\\AutoloadGenerator' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/AutoloadGenerator.php'
 	),
 	'Automattic\\Jetpack\\Autoloader\\AutoloadProcessor' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/AutoloadProcessor.php'
 	),
 	'Automattic\\Jetpack\\Autoloader\\CustomAutoloaderPlugin' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/CustomAutoloaderPlugin.php'
 	),
 	'Automattic\\Jetpack\\Autoloader\\ManifestGenerator' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/ManifestGenerator.php'
 	),
 	'Automattic\\Jetpack\\Config' => array(
-		'version' => '3.0.1.0',
+		'version' => '4.0.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-config/src/class-config.php'
 	),
+	'Automattic\\Jetpack\\Connection\\Abilities\\Connection_Abilities' => array(
+		'version' => '9.1.2.0',
+		'path'    => $vendorDir . '/automattic/jetpack-connection/src/abilities/class-connection-abilities.php'
+	),
 	'Automattic\\Jetpack\\Connection\\Authorize_Json_Api' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-authorize-json-api.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Client' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-client.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Connection_Assets' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-connection-assets.php'
 	),
+	'Automattic\\Jetpack\\Connection\\Connection_Health_Test_Base' => array(
+		'version' => '9.1.2.0',
+		'path'    => $vendorDir . '/automattic/jetpack-connection/src/health/class-connection-health-test-base.php'
+	),
+	'Automattic\\Jetpack\\Connection\\Connection_Health_Tests' => array(
+		'version' => '9.1.2.0',
+		'path'    => $vendorDir . '/automattic/jetpack-connection/src/health/class-connection-health-tests.php'
+	),
 	'Automattic\\Jetpack\\Connection\\Connection_Notice' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-connection-notice.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Error_Handler' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-error-handler.php'
 	),
+	'Automattic\\Jetpack\\Connection\\External_Storage' => array(
+		'version' => '9.1.2.0',
+		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-external-storage.php'
+	),
 	'Automattic\\Jetpack\\Connection\\Initial_State' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-initial-state.php'
 	),
+	'Automattic\\Jetpack\\Connection\\Jetpack_Connector' => array(
+		'version' => '9.1.2.0',
+		'path'    => $vendorDir . '/automattic/jetpack-connection/src/connectors/class-jetpack-connector.php'
+	),
 	'Automattic\\Jetpack\\Connection\\Manager' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-manager.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Manager_Interface' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/interface-manager.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Nonce_Handler' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-nonce-handler.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Package_Version' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-package-version.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Package_Version_Tracker' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-package-version-tracker.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Plugin' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-plugin.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Plugin_Storage' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-plugin-storage.php'
 	),
 	'Automattic\\Jetpack\\Connection\\REST_Connector' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-rest-connector.php'
 	),
+	'Automattic\\Jetpack\\Connection\\REST_Jetpack_AI_JWT' => array(
+		'version' => '9.1.2.0',
+		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-rest-jetpack-ai-jwt.php'
+	),
 	'Automattic\\Jetpack\\Connection\\Rest_Authentication' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-rest-authentication.php'
 	),
 	'Automattic\\Jetpack\\Connection\\SSO' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/sso/class-sso.php'
 	),
 	'Automattic\\Jetpack\\Connection\\SSO\\Force_2FA' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/sso/class-force-2fa.php'
 	),
 	'Automattic\\Jetpack\\Connection\\SSO\\Helpers' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/sso/class-helpers.php'
 	),
 	'Automattic\\Jetpack\\Connection\\SSO\\Notices' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/sso/class-notices.php'
 	),
 	'Automattic\\Jetpack\\Connection\\SSO\\User_Admin' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/sso/class-user-admin.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Secrets' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-secrets.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Server_Sandbox' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-server-sandbox.php'
 	),
+	'Automattic\\Jetpack\\Connection\\Site_Health' => array(
+		'version' => '9.1.2.0',
+		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-site-health.php'
+	),
+	'Automattic\\Jetpack\\Connection\\Storage_Provider_Interface' => array(
+		'version' => '9.1.2.0',
+		'path'    => $vendorDir . '/automattic/jetpack-connection/src/interface-storage-provider.php'
+	),
 	'Automattic\\Jetpack\\Connection\\Tokens' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-tokens.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Tokens_Locks' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-tokens-locks.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Traits\\WPCOM_REST_API_Proxy_Request' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/traits/trait-wpcom-rest-api-proxy-request.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Urls' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-urls.php'
 	),
+	'Automattic\\Jetpack\\Connection\\User_Account_Status' => array(
+		'version' => '9.1.2.0',
+		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-user-account-status.php'
+	),
 	'Automattic\\Jetpack\\Connection\\Users_Connection_Admin' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-users-connection-admin.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Utils' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-utils.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Webhooks' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-webhooks.php'
 	),
 	'Automattic\\Jetpack\\Connection\\Webhooks\\Authorize_Redirect' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/webhooks/class-authorize-redirect.php'
 	),
 	'Automattic\\Jetpack\\Connection\\XMLRPC_Async_Call' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-xmlrpc-async-call.php'
 	),
 	'Automattic\\Jetpack\\Connection\\XMLRPC_Connector' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-xmlrpc-connector.php'
 	),
 	'Automattic\\Jetpack\\Constants' => array(
-		'version' => '3.0.8.0',
+		'version' => '4.0.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-constants/src/class-constants.php'
 	),
 	'Automattic\\Jetpack\\CookieState' => array(
-		'version' => '5.4.0.0',
+		'version' => '7.0.1.0',
 		'path'    => $vendorDir . '/automattic/jetpack-status/src/class-cookiestate.php'
 	),
 	'Automattic\\Jetpack\\Errors' => array(
-		'version' => '5.4.0.0',
+		'version' => '7.0.1.0',
 		'path'    => $vendorDir . '/automattic/jetpack-status/src/class-errors.php'
 	),
 	'Automattic\\Jetpack\\Files' => array(
-		'version' => '5.4.0.0',
+		'version' => '7.0.1.0',
 		'path'    => $vendorDir . '/automattic/jetpack-status/src/class-files.php'
 	),
 	'Automattic\\Jetpack\\Heartbeat' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-heartbeat.php'
 	),
+	'Automattic\\Jetpack\\IP\\Utils' => array(
+		'version' => '0.6.0.0',
+		'path'    => $vendorDir . '/automattic/jetpack-ip/src/class-utils.php'
+	),
 	'Automattic\\Jetpack\\IdentityCrisis\\Exception' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/identity-crisis/class-exception.php'
 	),
 	'Automattic\\Jetpack\\IdentityCrisis\\REST_Endpoints' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/identity-crisis/class-rest-endpoints.php'
 	),
 	'Automattic\\Jetpack\\IdentityCrisis\\UI' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/identity-crisis/class-ui.php'
 	),
 	'Automattic\\Jetpack\\IdentityCrisis\\URL_Secret' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/identity-crisis/class-url-secret.php'
 	),
 	'Automattic\\Jetpack\\Identity_Crisis' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/identity-crisis/class-identity-crisis.php'
 	),
 	'Automattic\\Jetpack\\Modules' => array(
-		'version' => '5.4.0.0',
+		'version' => '7.0.1.0',
 		'path'    => $vendorDir . '/automattic/jetpack-status/src/class-modules.php'
 	),
 	'Automattic\\Jetpack\\Partner' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-partner.php'
 	),
 	'Automattic\\Jetpack\\Partner_Coupon' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-partner-coupon.php'
 	),
 	'Automattic\\Jetpack\\Paths' => array(
-		'version' => '5.4.0.0',
+		'version' => '7.0.1.0',
 		'path'    => $vendorDir . '/automattic/jetpack-status/src/class-paths.php'
 	),
 	'Automattic\\Jetpack\\Redirect' => array(
-		'version' => '3.0.7.0',
+		'version' => '4.0.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-redirect/src/class-redirect.php'
 	),
 	'Automattic\\Jetpack\\Roles' => array(
-		'version' => '3.0.8.0',
+		'version' => '4.0.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-roles/src/class-roles.php'
 	),
 	'Automattic\\Jetpack\\Status' => array(
-		'version' => '5.4.0.0',
+		'version' => '7.0.1.0',
 		'path'    => $vendorDir . '/automattic/jetpack-status/src/class-status.php'
 	),
 	'Automattic\\Jetpack\\Status\\Cache' => array(
-		'version' => '5.4.0.0',
+		'version' => '7.0.1.0',
 		'path'    => $vendorDir . '/automattic/jetpack-status/src/class-cache.php'
 	),
 	'Automattic\\Jetpack\\Status\\Host' => array(
-		'version' => '5.4.0.0',
+		'version' => '7.0.1.0',
 		'path'    => $vendorDir . '/automattic/jetpack-status/src/class-host.php'
 	),
 	'Automattic\\Jetpack\\Status\\Request' => array(
-		'version' => '5.4.0.0',
+		'version' => '7.0.1.0',
 		'path'    => $vendorDir . '/automattic/jetpack-status/src/class-request.php'
 	),
 	'Automattic\\Jetpack\\Status\\Visitor' => array(
-		'version' => '5.4.0.0',
+		'version' => '7.0.1.0',
 		'path'    => $vendorDir . '/automattic/jetpack-status/src/class-visitor.php'
 	),
 	'Automattic\\Jetpack\\Terms_Of_Service' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-terms-of-service.php'
 	),
 	'Automattic\\Jetpack\\Tracking' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/src/class-tracking.php'
 	),
 	'Container' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-container.php'
 	),
 	'Hook_Manager' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-hook-manager.php'
 	),
 	'Jetpack_IXR_Client' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/legacy/class-jetpack-ixr-client.php'
 	),
 	'Jetpack_IXR_ClientMulticall' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/legacy/class-jetpack-ixr-clientmulticall.php'
 	),
 	'Jetpack_Options' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/legacy/class-jetpack-options.php'
 	),
 	'Jetpack_Signature' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/legacy/class-jetpack-signature.php'
 	),
 	'Jetpack_Tracks_Client' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/legacy/class-jetpack-tracks-client.php'
 	),
 	'Jetpack_Tracks_Event' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/legacy/class-jetpack-tracks-event.php'
 	),
 	'Jetpack_XMLRPC_Server' => array(
-		'version' => '6.7.3.0',
+		'version' => '9.1.2.0',
 		'path'    => $vendorDir . '/automattic/jetpack-connection/legacy/class-jetpack-xmlrpc-server.php'
 	),
 	'Latest_Autoloader_Guard' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-latest-autoloader-guard.php'
 	),
 	'Manifest_Reader' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-manifest-reader.php'
 	),
 	'PHP_Autoloader' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-php-autoloader.php'
 	),
 	'Path_Processor' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-path-processor.php'
 	),
 	'Plugin_Locator' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-plugin-locator.php'
 	),
 	'Plugins_Handler' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-plugins-handler.php'
 	),
 	'Shutdown_Handler' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-shutdown-handler.php'
 	),
 	'Version_Loader' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-version-loader.php'
 	),
 	'Version_Selector' => array(
-		'version' => '5.0.2',
+		'version' => '6.0.0',
 		'path'    => $vendorDir . '/automattic/jetpack-autoloader/src/class-version-selector.php'
 	),
 	'WC_Shipstation_API' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/bootstrap.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Ajax_Die_Rig_Trait' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Ajax_Die_Rig_Trait.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Requests\\WC_Shipstation_API_Export_Corrupt_Refund_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Requests/WC_Shipstation_API_Export_Corrupt_Refund_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Requests\\WC_Shipstation_API_Export_Failure_Boundary_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Requests/WC_Shipstation_API_Export_Failure_Boundary_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Requests\\WC_Shipstation_API_Export_Notes_Flush_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Requests/WC_Shipstation_API_Export_Notes_Flush_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Requests\\WC_Shipstation_API_Export_Option_Encoding_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Requests/WC_Shipstation_API_Export_Option_Encoding_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Requests\\WC_Shipstation_API_Export_Prepaid_Duties_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Requests/WC_Shipstation_API_Export_Prepaid_Duties_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Requests\\WC_Shipstation_API_Export_Status_Guard_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Requests/WC_Shipstation_API_Export_Status_Guard_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Requests\\WC_Shipstation_API_Export_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Requests/WC_Shipstation_API_Export_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Requests\\WC_Shipstation_API_Shipnotify_Corrupt_Refund_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Requests/WC_Shipstation_API_Shipnotify_Corrupt_Refund_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Requests\\WC_Shipstation_API_Shipnotify_Hook_Fatal_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Requests/WC_Shipstation_API_Shipnotify_Hook_Fatal_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Requests\\WC_Shipstation_API_Shipnotify_Idempotency_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Requests/WC_Shipstation_API_Shipnotify_Idempotency_Test.php'
 	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Assembled_Bundle_Export_Test' => array(
 		'version' => 'dev-trunk',
@@ -386,6 +466,10 @@ return array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Rest/Diagnostics_Controller_Permission_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Fake_Subscription_Order' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Fake_Subscription_Order.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Get_Fulfillment_Items_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Rest/Get_Fulfillment_Items_Test.php'
@@ -398,9 +482,25 @@ return array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Rest/Inventory_Controller_Permission_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Orders_Controller_Corrupt_Refund_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Orders_Controller_Corrupt_Refund_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Orders_Controller_Failure_Boundary_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Orders_Controller_Failure_Boundary_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Orders_Controller_Permission_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Rest/Orders_Controller_Permission_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Orders_Controller_Prepaid_Duties_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Orders_Controller_Prepaid_Duties_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Orders_Controller_Status_Guard_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Orders_Controller_Status_Guard_Test.php'
 	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Orders_Controller_Test' => array(
 		'version' => 'dev-trunk',
@@ -414,9 +514,17 @@ return array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Rest/Transport_Recording_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Update_Orders_Shipments_Corrupt_Refund_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Update_Orders_Shipments_Corrupt_Refund_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Update_Orders_Shipments_Empty_Items_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Api/Rest/Update_Orders_Shipments_Empty_Items_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Update_Orders_Shipments_Hook_Fatal_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Api/Rest/Update_Orders_Shipments_Hook_Fatal_Test.php'
 	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Api\\Rest\\Update_Orders_Shipments_Test' => array(
 		'version' => 'dev-trunk',
@@ -446,6 +554,14 @@ return array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Api_Client_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Chosen_Rate_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Chosen_Rate_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Classic_Label_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Classic_Label_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Options_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Options_Test.php'
@@ -469,6 +585,10 @@ return array(
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Response_Mapper_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Response_Mapper_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Settings_Save_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Checkout/Checkout_Rates_Settings_Save_Test.php'
 	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Checkout\\Checkout_Rates_Shipping_Method_Test' => array(
 		'version' => 'dev-trunk',
@@ -502,9 +622,69 @@ return array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Connection_Log_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Custom_Order_Status_Trait' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Custom_Order_Status_Trait.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Deferred_Shipment_Emails_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Deferred_Shipment_Emails_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Enum_Helper_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Enum_Helper_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Features_Ssl_Termination_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Features_Ssl_Termination_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Features_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Features_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\GPDT\\Prepaid_Duties_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/GPDT/Prepaid_Duties_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Integrations\\PayPal_Payments_Integration_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Integrations/PayPal_Payments_Integration_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Interface_Only_Logger' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Interface_Only_Logger.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Legacy_Order_Storage_Trait' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Legacy_Order_Storage_Trait.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Log_Write_Isolation_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Log_Write_Isolation_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Logger_Capture_Trait' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Logger_Capture_Trait.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Logger_Custom_Logger_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Logger_Custom_Logger_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Non_String_Const_Fixture' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Enum_Helper_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Containment_Gaps_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Containment_Gaps_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Corrupt_Refund_Degradation_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Corrupt_Refund_Degradation_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Discard_Buffers_Safely_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Discard_Buffers_Safely_Test.php'
 	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Get_Checkout_Rate_Code_Test' => array(
 		'version' => 'dev-trunk',
@@ -518,13 +698,69 @@ return array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Order_Util_Item_Needs_Shipping_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Mark_Orders_Exported_Bulk_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Mark_Orders_Exported_Bulk_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Matchable_Export_Statuses_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Matchable_Export_Statuses_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Note_Tail_Containment_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Note_Tail_Containment_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Order_Notes_Limit_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Order_Notes_Limit_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Prime_Refunds_For_Batch_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Prime_Refunds_For_Batch_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Safe_Qty_Refunded_Log_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Safe_Qty_Refunded_Log_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Sanitize_For_Log_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Sanitize_For_Log_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Shipment_Processed_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Shipment_Processed_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Order_Util_Warn_Export_Status_Once_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Order_Util_Warn_Export_Status_Once_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Qty_Refund_Memo_Trait' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Qty_Refund_Memo_Trait.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\REST_API_Loader_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/REST_API_Loader_Test.php'
 	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Simulated_Plugin_Error' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Simulated_Plugin_Error.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Ssl_Proxy_Warning_Render_Test' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Ssl_Proxy_Warning_Render_Test.php'
+	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Status_Mapping_Mode_UX_Test' => array(
 		'version' => 'dev-trunk',
 		'path'    => $baseDir . '/tests/Unit/Status_Mapping_Mode_UX_Test.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Status_Warning_Throttle_Trait' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Status_Warning_Throttle_Trait.php'
+	),
+	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Throwing_Refund_Data_Store' => array(
+		'version' => 'dev-trunk',
+		'path'    => $baseDir . '/tests/Unit/Throwing_Refund_Data_Store.php'
 	),
 	'WooCommerce\\Shipping\\ShipStation\\Tests\\Unit\\Unmapped_Custom_Status_Notice_Test' => array(
 		'version' => 'dev-trunk',

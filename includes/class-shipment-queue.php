@@ -593,6 +593,12 @@ class Shipment_Queue {
 			}
 		}
 
+		// Flush the refund-read memos once per batch, as the synchronous REST path
+		// does per request: the worker is a long-lived process, so an unflushed
+		// memo would silence a recurring failure for the rest of the run.
+		Order_Util::flush_qty_refund_failure_log();
+		Order_Util::flush_degraded_refund_primes();
+
 		if ( self::depth() > 0 ) {
 			if ( function_exists( 'as_enqueue_async_action' ) ) {
 				as_enqueue_async_action( self::WORKER_HOOK, array(), self::WORKER_GROUP );

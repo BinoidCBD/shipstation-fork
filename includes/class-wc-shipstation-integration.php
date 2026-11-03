@@ -10,16 +10,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use WooCommerce\Shipping\ShipStation\Order_Util;
-use Automattic\WooCommerce\Enums\OrderInternalStatus;
+use WooCommerce\Shipping\ShipStation\Enum_Helper;
 use WooCommerce\Shipping\ShipStation\Logger;
 use WooCommerce\Shipping\ShipStation\Auth_Controller;
 use WooCommerce\Shipping\ShipStation\Connection_Log;
 use WooCommerce\Shipping\ShipStation\Features;
+use WooCommerce\Shipping\ShipStation\Checkout\Checkout_Rates_Options;
 
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound -- Legacy public class name retained for backward compatibility.
 /**
  * WC_ShipStation_Integration Class
  */
 class WC_ShipStation_Integration extends WC_Integration {
+	// phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound
 
 	/**
 	 * Authorization key for ShipStation API.
@@ -170,17 +173,23 @@ class WC_ShipStation_Integration extends WC_Integration {
 	 * API-mode overwrites so a merchant's custom mapping is not silently dropped
 	 * on the next ShipStation poll.
 	 *
-	 * @var string[]
+	 * Built at call time rather than declared as a class constant because the
+	 * values come from Enum_Helper, which resolves the WooCommerce enum with a
+	 * slug fallback and cannot be evaluated in a constant expression.
+	 *
+	 * @return string[]
 	 */
-	private const WC_CORE_ORDER_STATUSES = array(
-		OrderInternalStatus::PENDING,
-		OrderInternalStatus::PROCESSING,
-		OrderInternalStatus::ON_HOLD,
-		OrderInternalStatus::COMPLETED,
-		OrderInternalStatus::CANCELLED,
-		OrderInternalStatus::REFUNDED,
-		OrderInternalStatus::FAILED,
-	);
+	private static function wc_core_order_statuses(): array {
+		return array(
+			Enum_Helper::internal_pending(),
+			Enum_Helper::internal_processing(),
+			Enum_Helper::internal_on_hold(),
+			Enum_Helper::internal_completed(),
+			Enum_Helper::internal_cancelled(),
+			Enum_Helper::internal_refunded(),
+			Enum_Helper::internal_failed(),
+		);
+	}
 
 	/**
 	 * Stores logger class.
@@ -229,9 +238,9 @@ class WC_ShipStation_Integration extends WC_Integration {
 		$this->init_settings();
 
 		self::$auth_key        = get_option( 'woocommerce_shipstation_auth_key', false );
-		self::$export_statuses = $this->get_option( 'export_statuses', array( OrderInternalStatus::PROCESSING, OrderInternalStatus::ON_HOLD, OrderInternalStatus::COMPLETED, OrderInternalStatus::CANCELLED ) );
+		self::$export_statuses = $this->get_option( 'export_statuses', array( Enum_Helper::internal_processing(), Enum_Helper::internal_on_hold(), Enum_Helper::internal_completed(), Enum_Helper::internal_cancelled() ) );
 		self::$logging_enabled = 'yes' === $this->get_option( 'logging_enabled', 'yes' );
-		self::$shipped_status  = $this->get_option( 'shipped_status', OrderInternalStatus::COMPLETED );
+		self::$shipped_status  = $this->get_option( 'shipped_status', Enum_Helper::internal_completed() );
 		self::$gift_enabled    = 'yes' === $this->get_option( 'gift_enabled', 'no' );
 		self::$status_mapping  = array(
 			self::AWAITING_PAYMENT_STATUS  => $this->get_option( self::AWAITING_PAYMENT_STATUS . '_status' ),
@@ -292,9 +301,14 @@ class WC_ShipStation_Integration extends WC_Integration {
 	 */
 	public function update_status_mode( $value ) {
 		if ( ! in_array( $value, array( self::STATUS_MODE_API, self::STATUS_MODE_PLUGIN ), true ) ) {
-			Logger::debug(
-				'update_status_mode ignored invalid value',
-				array( 'value' => (string) $value )
+			Order_Util::log_isolated(
+				'the status-mode log write',
+				static function () use ( $value ) {
+					Logger::debug(
+						'update_status_mode ignored invalid value',
+						array( 'value' => (string) $value )
+					);
+				}
 			);
 			return;
 		}
@@ -318,12 +332,12 @@ class WC_ShipStation_Integration extends WC_Integration {
 	 * @return string HTML description (safe to pass to WC_Settings_API field — rendered via wp_kses_post).
 	 */
 	private function get_export_statuses_description(): string {
-		$export_statuses = (array) $this->get_option( 'export_statuses', array() );
+		$export_statuses = array_filter( (array) $this->get_option( 'export_statuses', array() ), 'is_string' );
 
 		$prefix     = self::$wc_status_prefix;
 		$prefix_len = strlen( $prefix );
 		$strip      = function ( $s ) use ( $prefix, $prefix_len ) {
-			return ( 0 === strpos( $s, $prefix ) ) ? substr( $s, $prefix_len ) : $s;
+			return ( is_string( $s ) && 0 === strpos( $s, $prefix ) ) ? substr( $s, $prefix_len ) : $s;
 		};
 
 		$export_slugs = array_map( $strip, $export_statuses );
@@ -390,7 +404,7 @@ class WC_ShipStation_Integration extends WC_Integration {
 			return array();
 		}
 
-		$export_statuses = (array) $this->get_option( 'export_statuses', array() );
+		$export_statuses = array_filter( (array) $this->get_option( 'export_statuses', array() ), 'is_string' );
 		if ( array() === $export_statuses ) {
 			return array();
 		}
@@ -398,7 +412,7 @@ class WC_ShipStation_Integration extends WC_Integration {
 		$prefix     = self::$wc_status_prefix;
 		$prefix_len = strlen( $prefix );
 		$strip      = function ( $s ) use ( $prefix, $prefix_len ) {
-			return ( 0 === strpos( $s, $prefix ) ) ? substr( $s, $prefix_len ) : $s;
+			return ( is_string( $s ) && 0 === strpos( $s, $prefix ) ) ? substr( $s, $prefix_len ) : $s;
 		};
 
 		$mapped_slugs = array();
@@ -486,6 +500,10 @@ class WC_ShipStation_Integration extends WC_Integration {
 	 * filter override renders it disabled, and the form fields are rebuilt after
 	 * the save so the conditional WordPress.com connection section reflects the
 	 * new opt-in value on the same request (SHIPSTN-141).
+	 *
+	 * The Checkout Rates checkbox gets the same pre-fill while it is disabled
+	 * because ShipStation has not provisioned a rates URL, so a merchant's
+	 * stored opt-in survives a de-provision/re-provision cycle (SHIPSTN-143).
 	 */
 	public function update_shipstation_options() {
 		$post_data = $this->get_post_data();
@@ -530,6 +548,23 @@ class WC_ShipStation_Integration extends WC_Integration {
 			&& Features::is_wpcom_transport_forced_by_override()
 		) {
 			$post_data[ $wpcom_field_key ] = '1';
+			$this->set_post_data( $post_data );
+		}
+
+		// The Checkout Rates checkbox renders disabled while no rates URL has
+		// been provisioned (see data-settings.php), so it is absent from the
+		// POST payload and validate_checkbox_field() would coerce the gap to
+		// `no`, clearing a stored opt-in. Round-trip the stored value instead so
+		// the merchant's choice survives a de-provision/re-provision cycle;
+		// while the field is enabled an absent key is a genuine untick and must
+		// keep clearing the option.
+		$checkout_rates_field_key = $this->get_field_key( Checkout_Rates_Options::OPTION_ENABLED );
+		if (
+			! isset( $post_data[ $checkout_rates_field_key ] )
+			&& 'yes' === $this->get_option( Checkout_Rates_Options::OPTION_ENABLED )
+			&& ! Checkout_Rates_Options::is_configured()
+		) {
+			$post_data[ $checkout_rates_field_key ] = '1';
 			$this->set_post_data( $post_data );
 		}
 
@@ -600,7 +635,12 @@ class WC_ShipStation_Integration extends WC_Integration {
 
 		$this->refresh_status_mapping();
 
-		Logger::debug( 'Mapping the status for fresh install', $log_info );
+		Order_Util::log_isolated(
+			'the status-mapping log write',
+			static function () use ( $log_info ) {
+				Logger::debug( 'Mapping the status for fresh install', $log_info );
+			}
+		);
 	}
 
 	/**
@@ -655,8 +695,9 @@ class WC_ShipStation_Integration extends WC_Integration {
 			return;
 		}
 
-		$log_info       = array();
-		$status_mapping = is_array( $request_params['status_mapping'] ) ? $request_params['status_mapping'] : array( $request_params['status_mapping'] );
+		$log_info         = array();
+		$status_mapping   = is_array( $request_params['status_mapping'] ) ? $request_params['status_mapping'] : array( $request_params['status_mapping'] );
+		$wc_core_statuses = self::wc_core_order_statuses();
 
 		foreach ( $status_mapping as $status_parameter ) {
 			$statuses = explode( ':', $status_parameter );
@@ -686,7 +727,7 @@ class WC_ShipStation_Integration extends WC_Integration {
 			// every poll (SHIPSTN-122).
 			$existing_wc_statuses = (array) $this->get_option( $ss_status . '_status', array() );
 			$preserved_custom     = array_values(
-				array_diff( $existing_wc_statuses, self::WC_CORE_ORDER_STATUSES, $wc_statuses )
+				array_diff( $existing_wc_statuses, $wc_core_statuses, $wc_statuses )
 			);
 			$wc_statuses          = array_values( array_unique( array_merge( $wc_statuses, $preserved_custom ) ) );
 
@@ -705,7 +746,12 @@ class WC_ShipStation_Integration extends WC_Integration {
 
 		$this->refresh_status_mapping();
 
-		Logger::debug( 'Status has been mapped', $log_info );
+		Order_Util::log_isolated(
+			'the status-mapping log write',
+			static function () use ( $log_info ) {
+				Logger::debug( 'Status has been mapped', $log_info );
+			}
+		);
 	}
 
 	/**
@@ -1176,6 +1222,17 @@ class WC_ShipStation_Integration extends WC_Integration {
 					</div>
 
 					<?php
+					// Leads the section: with TLS terminated upstream, every other
+					// status on this screen is a symptom of it (SHIPSTN-166).
+					if ( Features::is_ssl_terminated_upstream() ) {
+						wc_get_template(
+							'ssl-proxy-warning.php',
+							array(),
+							'',
+							WC_SHIPSTATION_ABSPATH . 'templates/'
+						);
+					}
+
 					if ( '' !== $verdict['banner'] ) {
 						$copy = self::connection_banner_copy( $verdict['banner'] );
 						// never_synced reads as info (just finish setup); every other

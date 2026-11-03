@@ -1,0 +1,98 @@
+{
+    "name": "woocommerce/woocommerce-shipstation",
+    "description": "Ship your WooCommerce orders with confidence, save on top carriers, and automate your processes with ShipStation.",
+    "homepage": "https://woocommerce.com/products/shipstation-integration/",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0+",
+    "archive": {
+        "exclude": [
+            "!/assets",
+	        "assets/sass",
+            "node_modules",
+            "bin",
+            "tests",
+            "output",
+            "Gruntfile.js",
+            "README.md",
+            "package.json",
+            "package-lock.json",
+            "composer.lock",
+            "phpunit.xml.dist",
+            "woocommerce-shipstation.zip",
+            ".*",
+            "pnpm-lock.yaml",
+            "qit.json",
+            "includes/api/docs",
+            "wordpress_org_assets",
+            "AGENTS.md",
+            "CLAUDE.md"
+        ]
+    },
+    "require": {
+        "php": ">=7.4",
+        "automattic/jetpack-autoloader": "^6.0.0",
+        "automattic/jetpack-config": "^4.0.0",
+        "automattic/jetpack-connection": "^9.1.2"
+    },
+    "require-dev": {
+        "wp-coding-standards/wpcs": "*",
+        "dealerdirect/phpcodesniffer-composer-installer": "*",
+        "woocommerce/qit-cli": "*",
+        "woocommerce/woocommerce-sniffs": "*",
+        "phpstan/phpstan": "^2",
+        "szepeviktor/phpstan-wordpress": "^2",
+        "php-stubs/wp-cli-stubs": "*",
+        "php-stubs/woocommerce-stubs": "*",
+        "phpunit/phpunit": "^9.6",
+        "yoast/phpunit-polyfills": "^2.0"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "WooCommerce\\Shipping\\ShipStation\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "automattic/jetpack-autoloader": true
+        }
+    },
+    "scripts": {
+        "phpstan": [
+            "./vendor/bin/phpstan analyse --configuration=.phpstan/local-config.neon --level=2"
+        ],
+        "check-security": [
+            "./vendor/bin/phpcs --standard=./.phpcs.security.xml --report-full --report-summary -s"
+        ],
+        "check-l18n": [
+            "./vendor/bin/phpcs --standard=./.phpcs.l18n.xml --report-full --report-summary -s"
+        ],
+        "check-php": [
+            "./vendor/bin/phpcs --standard=./.phpcs.php.xml --report-full --report-summary -s"
+        ],
+        "check-php:fix": [
+            "./vendor/bin/phpcbf --standard=./.phpcs.php.xml --report-full --report-summary"
+        ],
+        "check-all": [
+            "./vendor/bin/phpcs --standard=./.phpcs.xml --report-full --report-summary -s"
+        ],
+        "check-all:fix": [
+            "./vendor/bin/phpcbf --standard=./.phpcs.xml --report-full --report-summary"
+        ],
+        "qit:security": [
+            "pnpm run build && composer install && ./vendor/bin/qit run:security woocommerce-shipstation-integration --zip=woocommerce-shipstation.zip"
+        ],
+        "qit:plugin-check": [
+            "pnpm run build && composer install && ./vendor/bin/qit run:plugin-check woocommerce-shipstation-integration --zip=woocommerce-shipstation.zip"
+        ],
+        "qit:e2e": [
+            "pnpm run build:e2e && composer install && ./vendor/bin/qit run:e2e woocommerce-shipstation-integration --zip=woocommerce-shipstation-integration.zip --config=./qit.json --test-package=./tests/e2e"
+        ],
+        "qit:e2e:ui": [
+            "pnpm run build:e2e && composer install && ./vendor/bin/qit run:e2e woocommerce-shipstation-integration --zip=woocommerce-shipstation-integration.zip --config=./qit.json --test-package=./tests/e2e --ui"
+        ],
+        "test": [
+            "bash tests/bin/run-tests.sh"
+        ]
+    }
+}

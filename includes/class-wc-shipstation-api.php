@@ -11,10 +11,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 require_once WC_SHIPSTATION_ABSPATH . 'includes/api/requests/class-wc-shipstation-api-request.php';
 
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound -- Legacy public class name retained for backward compatibility.
 /**
  * WC_Shipstation_API Class
  */
 class WC_Shipstation_API extends WC_Shipstation_API_Request {
+	// phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound
 
 	/**
 	 * Stores whether or not shipstation has been authenticated.

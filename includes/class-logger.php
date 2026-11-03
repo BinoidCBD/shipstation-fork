@@ -9,7 +9,7 @@
 
 namespace WooCommerce\Shipping\ShipStation;
 
-use WC_Logger;
+use WC_Logger_Interface;
 use WC_ShipStation_Integration;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -23,9 +23,15 @@ class Logger {
 	/**
 	 * WC Logger instance.
 	 *
-	 * @var WC_Logger|null
+	 * Typed to the interface, not to WC_Logger: woocommerce_logging_class
+	 * accepts any WC_Logger_Interface implementation, and wc_get_logger()
+	 * checks against the interface too. A narrower type rejects a logger
+	 * WooCommerce itself considers valid, which fatals every request that
+	 * writes to the log.
+	 *
+	 * @var WC_Logger_Interface|null
 	 */
-	private static ?WC_Logger $logger = null;
+	private static ?WC_Logger_Interface $logger = null;
 
 	/**
 	 * Is debug enabled.
